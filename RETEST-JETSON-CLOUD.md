@@ -1,8 +1,16 @@
-# Jetson 调用云端 RAG：非首次启动、测试与结果判读
+# Jetson 调用云端 RAG：首次部署、非首次测试与结果判读
 
 更新日期：2026-10-13。
 
-本文适用于已经完成首次解压、文件传输和基础测试之后的重复联调。用户反馈本轮测试可能已成功，但尚未提供实际接口响应供复核；本文中的返回值是依据当前代码和发布库给出的预期，不是本次远端运行记录。
+本文覆盖首次部署与之后的重复联调。用户反馈本轮测试可能已成功，但尚未提供实际接口响应供复核；本文中的返回值是依据当前代码和发布库给出的预期，不是本次远端运行记录。
+
+阅读路线：
+
+- **首次调用**：第 1 节确认路径 → 第 1A 节准备程序和凭证 → 第 3～8 节启动并调用 → 第 9～10 节判断结果。
+- **非首次调用**：跳过第 1A 节，从第 2 节开始；不要重复解压或生成凭证。
+- **测试结束与排错**：第 11～12 节。
+
+文件名继续沿用 `RETEST-JETSON-CLOUD.md`，内容已包含首次指南。本文文件保存在本地 Windows 项目中，不会自动同步到云端或 Jetson。
 
 ## 1. 固定路径与测试范围
 
@@ -18,7 +26,7 @@
 | Jetson | `/home/jetson/rag-link-test/service.token` | 与云端内容一致的凭证 |
 | Jetson | `127.0.0.1:18787` | SSH 隧道入口 |
 
-本文假定 Jetson 用户是 `jetson`、目录与上表一致；如实际不同，请修改对应路径。若云端没有 `app` 目录，先找回实际解压目录，不要直接执行启动命令，也不必重复上传。
+本文假定 Jetson 用户是 `jetson`、目录与上表一致；如实际不同，请修改对应路径。首次部署按第 1A 节创建 `app`；若以前已部署但找不到此目录，先查找实际解压目录，不要盲目重复上传和解压。
 
 测试链路：
 
@@ -31,6 +39,248 @@ Jetson 查询客户端 / curl
 ```
 
 这证明宿主机上的接口调用，不证明 k8s Pod 联通、真实 Agent 两次决策、服务下载、镜像导入、服务启动或无人机任务执行。普通 Pod 的 localhost 不等于宿主机 localhost。
+
+## 1A. 首次调用测试指南：一次性准备
+
+本节说明首次上传、解压、环境检查和文件传输。准备结束后继续第 3～10 节的共用启动和测试流程。已经完成的步骤可跳过。
+
+### 1A.1 首次需要哪些文件？
+
+| 机器 | 文件 | 用途 |
+|---|---|---|
+| 云端 | `uav-rag-local-release.zip` | 包含程序、预构建数据库和验收材料 |
+| 云端 | `release-sha256.txt` | 检查发布包传输完整性 |
+| 云端 | `uav-rag-test.token` | RAG 访问凭证，已有时必须复用 |
+| Jetson | `uav_rag/` 整个目录 | 使用项目 Python 查询入口所需代码 |
+| Jetson | `service.token` | 从云端复制的同一份凭证 |
+
+仅用 curl 验证接口时，Jetson 只需要凭证，不需要 Python 客户端。Jetson 不需要复制知识库、GmSSL 源码、完整发布包或服务镜像。云端和 Jetson 的凭证文件名可以不同，但内容必须一致。
+
+### 1A.2 登录云端并准备目录
+
+从电脑或 Jetson 执行：
+
+```bash
+ssh root@47.109.49.98
+```
+
+目的：进入云端终端。主机指纹应核对，不能忽略指纹变化警告。
+
+登录后在云端执行：
+
+```bash
+mkdir -p /root/cloud-rag
+ls -la /root/cloud-rag
+```
+
+- `mkdir -p`：目录不存在时创建，已存在时保留内容。
+- `ls -la`：查看已有文件，防止重复上传覆盖。
+
+你当前已有发布包、校验文件和凭证，可跳过下一小节上传。
+
+### 1A.3 发布包尚未上传时：在 Windows 上传
+
+以下两条必须在本地 **Windows PowerShell** 执行，不在云端或 Jetson 执行：
+
+```powershell
+cd E:\claudeCode\project\Intra-group-project\cloud-rag
+scp .\data\uav-rag-local-release.zip .\data\release-sha256.txt root@47.109.49.98:/root/cloud-rag/
+```
+
+- `cd`：进入本地项目目录。
+- `scp`：通过 SSH 把两个文件传到云端。
+- 这不会自动解压或启动服务；目标同名文件会被覆盖，已上传完成时不要重复执行。
+
+### 1A.4 云端验证 Python 与 FTS5
+
+回到云端 SSH 终端执行：
+
+```bash
+/root/.local/bin/python3.11 --version
+/root/.local/bin/python3.11 -c "import sqlite3; c=sqlite3.connect(':memory:'); c.execute('CREATE VIRTUAL TABLE test USING fts5(text)'); print('Python 3.11: FTS5 OK')"
+```
+
+第一条验证解释器版本。第二条创建内存数据库并尝试创建 FTS5 全文检索表，不修改已有知识库。
+
+预期第一条显示 Python 3.11 的具体版本，第二条显示：
+
+```text
+Python 3.11: FTS5 OK
+```
+
+当前云端已确认此解释器可用。换机器后若路径不存在或 FTS5 检查失败，先处理环境，不要继续启动，也不要替换系统默认 Python 3.8。
+
+### 1A.5 校验发布包完整性
+
+在云端执行：
+
+```bash
+cd /root/cloud-rag
+tr -d '\r' < release-sha256.txt | sha256sum -c -
+```
+
+- `tr -d '\r'`：读取时删除 Windows 回车符，避免校验程序把回车误当成文件名的一部分；不修改原文件。
+- `|`：将处理后的清单传给下一条命令。
+- `sha256sum -c -`：从标准输入读取清单，核对 ZIP 哈希。
+
+成功输出：
+
+```text
+uav-rag-local-release.zip: OK
+```
+
+这说明压缩包与校验清单一致，不是发布者身份的数字签名验证。出现 FAILED 或文件不存在时停止，检查路径和上传文件。
+
+### 1A.6 首次解压程序
+
+在云端执行：
+
+```bash
+mkdir /root/cloud-rag/app
+```
+
+故意不使用 `-p`：如果目录已存在会提示错误，此时停止本步骤并检查目录，不能继续覆盖解压，也不要删除已有文件。已解压并测试通过时直接复用。
+
+仅当目录刚刚创建成功时，执行：
+
+```bash
+/root/.local/bin/python3.11 -m zipfile -e \
+  /root/cloud-rag/uav-rag-local-release.zip \
+  /root/cloud-rag/app
+cd /root/cloud-rag/app
+ls -ld uav_rag
+ls -lh data/gmssl.sqlite3
+```
+
+- `-m zipfile`：使用 Python 自带 ZIP 工具。
+- `-e`：解压，后面依次为发布包与目标目录。
+- `cd`：切换到解压后的程序目录。
+- `ls -ld`：检查程序包目录。
+- `ls -lh`：检查数据库存在及文件大小。
+
+预期目录：
+
+```text
+/root/cloud-rag/
+├── release-sha256.txt
+├── uav-rag-local-release.zip
+├── uav-rag-test.token
+└── app/
+    ├── uav_rag/
+    ├── data/gmssl.sqlite3
+    ├── tests/
+    └── 其他验收和部署资料
+```
+
+不需要重新构建数据库。解压本身不会启动 RAG 或无人机业务服务。
+
+### 1A.7 首次运行发布包验证与测试
+
+在云端程序目录执行：
+
+```bash
+cd /root/cloud-rag/app
+/root/.local/bin/python3.11 verify_release.py /root/cloud-rag/uav-rag-local-release.zip
+/root/.local/bin/python3.11 -m unittest discover -s tests -v
+```
+
+- `verify_release.py`：验证 ZIP 中的文件列表、路径和内容哈希，检查的是 ZIP 本身，不是实时网络服务。
+- `unittest discover`：发现并运行测试。
+- `-s tests`：指定测试目录。
+- `-v`：显示各项测试结果。
+
+云端没有配置原始无人机项目时，预期结尾：
+
+```text
+Ran 21 tests ...
+OK (skipped=1)
+```
+
+表示 20 项通过、1 项跳过。跳过项应是依赖原始无人机项目的集成测试；若有其他跳过原因或失败，应查看具体测试名。此结果证明这套 RAG 测试通过，不代表 Jetson 网络、真实模型或无人机完整业务测试通过。
+
+### 1A.8 云端准备凭证：不要替换已有凭证
+
+先查看文件是否存在：
+
+```bash
+ls -l /root/cloud-rag/uav-rag-test.token
+```
+
+已有非空文件时直接复用。你当前已拥有此文件，正常情况下不需要执行生成命令。
+
+仅在首次部署且凭证确实不存在时执行：
+
+```bash
+if [ ! -e /root/cloud-rag/uav-rag-test.token ]; then
+  (umask 077; set -C; /root/.local/bin/python3.11 -c "import secrets; print(secrets.token_hex(32))" > /root/cloud-rag/uav-rag-test.token)
+fi
+```
+
+- 条件判断保证已有路径不进入生成分支。
+- `umask 077` 限制新建凭证文件权限。
+- `set -C` 防止输出重定向覆盖已有普通文件。
+- `secrets.token_hex(32)` 生成 32 随机字节并编码成 64 个十六进制字符。
+- `>` 将内容写入文件，不显示到终端；括号将 shell 设置限制在子进程内。
+
+随后检查：
+
+```bash
+test -s /root/cloud-rag/uav-rag-test.token && echo "Token file OK"
+chmod 600 /root/cloud-rag/uav-rag-test.token
+```
+
+`test -s` 检查存在且非空；无成功提示时停止排查。`chmod 600` 仅允许所有者读写。不要打印、分享凭证，不要在 Jetson 已复制后重新生成，否则两端将不匹配。
+
+### 1A.9 Jetson 首次接收客户端文件
+
+以下在 **Jetson 终端**执行：
+
+```bash
+mkdir -p /home/jetson/rag-link-test
+cd /home/jetson/rag-link-test
+ls -la
+```
+
+目的：建立独立测试目录并检查已有内容，不改动 `uav01` 或主目录原有的 `client.py`。
+
+若文件尚未传入，执行：
+
+```bash
+scp -r root@47.109.49.98:/root/cloud-rag/app/uav_rag /home/jetson/rag-link-test/
+scp root@47.109.49.98:/root/cloud-rag/uav-rag-test.token /home/jetson/rag-link-test/service.token
+chmod 600 /home/jetson/rag-link-test/service.token
+```
+
+- 第一条递归复制完整客户端包，现有命令入口会导入其他模块，因此不要只复制 `client.py`。
+- 第二条复制同一份云端凭证，并在 Jetson 命名为 `service.token`。
+- 第三条限制凭证权限。
+- `scp` 可能覆盖同名文件，已完成传输时跳过，不要重复覆盖。
+
+检查：
+
+```bash
+ls -ld /home/jetson/rag-link-test/uav_rag
+test -s /home/jetson/rag-link-test/service.token && echo "Jetson token file OK"
+python3 --version
+```
+
+Python 3.11+ 可使用项目客户端；版本较低时先采用第 8.1 节 curl 测试，不用替换系统 Python。`(base)` 可能表示正在使用 Conda 环境，版本以命令实际输出为准。
+
+### 1A.10 首次启动到验收的完整顺序
+
+一次性准备结束后，按后文共用章节执行：
+
+| 顺序 | 章节 | 操作位置与动作 | 预期证据 |
+|---|---|---|---|
+| 1 | 第 3～4 节 | 云端检查端口、设置凭证路径并启动 RAG | 显示监听 `127.0.0.1:8787` |
+| 2 | 第 5 节 | Jetson 建立 SSH 隧道 | 本地 `18787` 监听；还不能据此判定接口成功 |
+| 3 | 第 6 节 | Jetson 请求健康接口 | `status: ok` 和索引版本 |
+| 4 | 第 7 节 | 不带凭证访问目录接口 | HTTP 401，说明拒绝未授权请求 |
+| 5 | 第 8 节 | 带凭证提交检索并保存 JSON | HTTP 200 |
+| 6 | 第 9～10 节 | 核对结果内容并完成清单 | 任务号匹配、服务 ID 正确、相关引用非空 |
+| 7 | 第 11 节 | 保存证据，按需停止本轮进程 | 文件保留，下次无需重新部署 |
+
+首次与非首次使用相同的健康、鉴权、检索和结果判读方法，因此后文命令只维护一套。首次成功后，下次跳过本节所有一次性准备。
 
 ## 2. 非首次测试不需要做什么
 
@@ -50,7 +300,7 @@ Jetson 查询客户端 / curl
 | B | Jetson，建立 SSH 隧道 | 保持打开 |
 | C | Jetson，执行接口测试和保存结果 | 用于发请求 |
 
-以下代码块为 Linux shell 命令。多行末尾的 `\` 表示命令还没结束，反斜杠后不要添加空格。不要复制终端提示符。
+除第 1A.3 节明确标注的 Windows PowerShell 命令外，其余代码块为 Linux shell 命令。多行末尾的 `\` 表示命令还没结束，反斜杠后不要添加空格。不要复制终端提示符。
 
 ## 4. 终端 A：检查并恢复云端 RAG
 
@@ -462,3 +712,7 @@ HTTP 200、正确任务编号、正确服务列表和相关的非空引用一起
 | 有 JSON 文件但状态非 200 | 文件可能保存了错误正文，不是成功证据 |
 
 注意：`demo.py` 会启动它自己的本地演示服务，不能用来证明 Jetson 到云端的链路；本次应以这里明确指向 `127.0.0.1:18787` 的远端隧道请求为准。
+
+目前问题：
+目前的rag补充是：SM2 检索到的是签名、验签函数声明，SM4-GCM 检索到的是参数校验测试代码，而不是算法介绍。
+边界问题：候选算法较多、任务文本较长时，增强后的提示词可能超过长度限制。
