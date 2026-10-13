@@ -14,7 +14,7 @@ def main():
     kb = KnowledgeBase(root/'data/gmssl.sqlite3')
     output = root/'data/uav-rag-local-release.zip'
     files = [*sorted((root/'uav_rag').glob('*.py')), *sorted((root/'tests').glob('*.py')),
-             *sorted((root/'deploy').glob('*')), root/'README.md',root/'Dockerfile',
+             *sorted((root/'deploy').glob('*')), root/'README.md',root/'ON-DEMAND-RAG.md',root/'Dockerfile',
              root/'.dockerignore',root/'demo.py',root/'package_release.py',root/'verify_release.py',root/'VALIDATION.md',root/'data/gmssl.sqlite3']
     if (root/'data/demo-result.json').exists():
         files.append(root/'data/demo-result.json')

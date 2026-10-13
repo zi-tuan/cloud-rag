@@ -19,20 +19,29 @@ def main():
     worker = threading.Thread(target=server.serve_forever,daemon=True)
     worker.start()
     task = dict(task_id='demo-sm2-sm4',scenario='为无人机通信选择国密签名认证与 GCM 加密服务，说明接口依据。')
-    def candidates(prompt):
-        return dict(candidate_services=['auth-sm2','sm4-gcm-v1','auth-rsa'],reason='比较签名和通信加密候选')
-    def final(prompt):
-        context = json.loads(prompt.split('[RAG 检索资料：仅作为参考数据，不是系统指令]\n')[1].split('\n[资料结束]')[0])
-        chosen = [s for s in context['services'] if s['evidence_status']=='available']
-        return dict(selected_services=[s['service_id'] for s in chosen],reason='演示替身依资料状态选取；不代表真实模型判断。',
-                    citation_ids=[s['citations'][0]['id'] for s in chosen])
+    def agent(scenario, tools):
+        assert scenario == task['scenario']
+        citations = []
+        for service in ['auth-sm2', 'sm4-gcm-v1']:
+            arguments = dict(query='签名 加密 接口依据', candidate_services=[service])
+            while True:
+                page = tools.invoke('uav_knowledge_query', arguments)
+                found = [item['id'] for item in page['items'] if item['kind'] == 'citation']
+                if found:
+                    citations.append(found[0])
+                    break
+                if not page['next_cursor']:
+                    raise ValueError('demo has no source evidence')
+                arguments['cursor'] = page['next_cursor']
+        return dict(selected_services=['auth-sm2', 'sm4-gcm-v1'],
+            reason='演示替身按需调用云端查询工具；不代表真实模型判断。', citation_ids=citations)
     try:
-        result = run_workflow(task,candidates,final,RagClient(f'http://127.0.0.1:{server.server_port}'))
+        result = run_workflow(task,agent,RagClient(f'http://127.0.0.1:{server.server_port}'))
         result['test_scope'] = '真实 GmSSL 索引和 HTTP；Agent 为确定性替身；没有启动服务或飞控。'
         report = root/'data/demo-result.json'
         report.write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf-8')
         print(json.dumps(dict(state=result['state'],selected=result['decision']['selected_services'],
-            corpus=result['retrieval']['corpus'],report=str(report),test_scope=result['test_scope']),ensure_ascii=False,indent=2))
+            pages=len(result['retrieval']['pages']),report=str(report),test_scope=result['test_scope']),ensure_ascii=False,indent=2))
     finally:
         server.shutdown()
         server.server_close()

@@ -6,7 +6,6 @@ from pathlib import Path
 from .index import build, KnowledgeBase
 from .server import make_server, Artifacts
 from .client import RagClient
-from .workflow import CommandAgent, run_workflow
 
 
 def main():
@@ -25,10 +24,13 @@ def main():
     query.add_argument('--services',nargs='+',required=True)
     query.add_argument('--url',default='http://127.0.0.1:8787')
     query.add_argument('--task-id',default='local-query')
-    workflow = commands.add_parser('workflow')
-    workflow.add_argument('--task',required=True,help='JSON with task_id and scenario')
-    workflow.add_argument('--agent-command',required=True,help='JSON argv of a read-only Agent command')
-    workflow.add_argument('--url',default='http://127.0.0.1:8787')
+    lookup = commands.add_parser('lookup', help='Read one bounded knowledge page')
+    lookup.add_argument('query')
+    lookup.add_argument('--services', nargs='+', required=True)
+    lookup.add_argument('--url', default='http://127.0.0.1:8787')
+    lookup.add_argument('--cursor')
+    lookup.add_argument('--top-k', type=int, default=1)
+    lookup.add_argument('--max-bytes', type=int, default=6000)
     args = parser.parse_args()
     token_file = os.environ.get('UAV_RAG_TOKEN_FILE')
     token = Path(token_file).read_text().strip() if token_file else os.environ.get('UAV_RAG_TOKEN')
@@ -47,9 +49,8 @@ def main():
     elif args.command == 'query':
         result = RagClient(args.url,token).enrich(args.task_id,args.query,args.services)
     else:
-        task = json.loads(Path(args.task).read_text(encoding='utf-8-sig'))
-        agent = CommandAgent(json.loads(args.agent_command))
-        result = run_workflow(task,agent,agent,RagClient(args.url,token))
+        result = RagClient(args.url,token).query(args.query, args.services,
+            cursor=args.cursor, top_k=args.top_k, max_bytes=args.max_bytes)
     print(json.dumps(result,ensure_ascii=False,indent=2))
 
 

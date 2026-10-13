@@ -1,6 +1,6 @@
 # 无人机服务 RAG：本地实现与云端交付
 
-本模块为现有 UAV 项目增加云端服务知识库。输入为无人机 Agent 初选的候选服务；输出为 GmSSL 原文片段、出处、证据状态及可选的服务归档下载信息。最终判断交给无人机 Agent，启动与切换继续使用原项目的 MCP Guard、TaskExecutor 和 SwitchCoordinator。
+本模块为现有 UAV 项目增加云端服务知识库。无人机 Agent 通过只读工具按需检索云端数据库，获取有长度预算的知识分页；原任务不追加数据库内容。旧批量补充接口保留作人工查询兼容。最终判断交给无人机 Agent，启动与切换继续使用原项目的 MCP Guard、TaskExecutor 和 SwitchCoordinator。
 
 Python 3.11+，仅依赖标准库及 SQLite FTS5。当前是 **BM25 检索增强实现**，未使用 embedding 模型或向量数据库；中文通过双字分词和受控术语扩展匹配 C 接口。生成步骤由现有无人机 Agent 承担，检索服务本身不编造服务说明、不调用外部模型。若以后引入向量检索，应保留现有引用和服务 ID 约束，并先建立检索评测集。
 
@@ -53,7 +53,7 @@ SQLite 的 `chunks` 表保存原文、相对路径、起止行号、文件 SHA-2
 
 算法描述维护在 `uav_rag/descriptions.py`，执行 `index` 后写入 SQLite 的 `algorithm_descriptions` 表；补充接口按候选服务 ID 从数据库读取，不依赖源码关键词是否命中。修改描述后需重建索引并重启服务。数据库 schema 为 2，旧 schema 1 必须用上面的 `index` 命令重建。元数据 `description_count` 和 `description_revision` 分别记录描述数量与内容哈希，原 `revision` 仍标识 GmSSL 源码语料。
 
-描述属于带参考来源的人工整理知识，不是服务实现或部署证明。因此 RSA、Ed25519 即使有描述，其原有 `evidence_status` 和源码引用也不会自动提升。Agent 会收到完整描述（PiRunner 仅截短源码引用），并结合用途、优点和限制说明选型理由；通用性能判断不替代目标设备实测。
+描述属于带参考来源的人工整理知识，不是服务实现或部署证明。因此 RSA、Ed25519 即使有描述，其原有 `evidence_status` 和源码引用也不会自动提升。完整描述保存在云端，Agent 通过分页工具读取需要的用途、优点和限制；通用性能判断不替代目标设备实测。
 
 `GET /v1/services` 返回知识服务目录；`GET /health` 返回索引版本；`GET /v1/artifacts/{service_id}` 只提供登记的归档。
 
@@ -61,50 +61,56 @@ GmSSL 的 SM2、SM4、AES 等知识不代表无人机现有镜像使用了 GmSSL
 
 本地 GmSSL 的 RSA 文件主要提供公钥打印，不能证明 RSA-PSS 认证实现；未找到 Ed25519 实现资料。这两项会如实返回证据不足。应补充现有认证服务的说明后再扩充其知识映射，不能因为 RAG 缺资料就判定原服务不存在。
 
-## 两阶段工作流
+## 按需查询工作流（当前接入方式）
 
 ```text
-云端原任务 API → 无人机初选 Agent → candidate_services
-                                    ↓
-                           本模块 /v1/services/enrich
-                                    ↓
-原任务 + 带引用补充资料 → 无人机最终选择 Agent
-                                    ↓
-                      原 MCP 结构化回执和确定性执行器
+原任务 → 无人机 Agent（任务文本保持原样）
+              ↕ uav_knowledge_query 只读工具
+          云端 /v1/knowledge/query → SQLite 知识库
+              ↓ 有预算的结果页 / next_cursor
+          Agent 判断 → 原 MCP Guard → 原确定性执行器
 ```
 
-`uav_rag.workflow.run_workflow` 可传入两个模型调用函数，验证最终选择属于候选且有引用；无证据时返回 `insufficient_evidence`。它返回 `planned`，不宣称已启动或完成通信切换。
+不再运行“初选后批量拼接增强提示词”。云端保管完整知识，Agent 自己组织简短检索问题，按候选逐项查询，需要更多内容时翻页。工具返回的少量资料仍进入模型上下文，这是 Agent 使用检索知识的途径；它不会下载整库或将所有候选知识预填进任务。
 
-真实模型命令模式：
+`POST /v1/knowledge/query` 示例：
+
+```json
+{
+  "query": "SM4-GCM 的使用限制与接口依据",
+  "candidate_services": ["sm4-gcm-v1"],
+  "top_k": 1,
+  "max_bytes": 6000
+}
+```
+
+返回 `index_revision`、`description_revision`、`items` 和 `next_cursor`。`items` 分为 `service`（映射和证据状态）、`description`（描述字段）及 `citation`（原文片段）。非空游标表示还有内容；下一次传相同 query、candidate_services、top_k，加上 cursor。游标绑定查询与索引版本，过期或换查询时返回 400。
+
+- 查询文本 1～512 字符，单次候选 1～16 个，别名去重；不把长任务作为 query。
+- HTTP 单页默认最多 6,000 UTF-8 字节，可设 4,096～12,000；计算包含 JSON 元数据和游标。
+- Agent 工具单页最多 6,000 字节，每个 MCP 进程最多 8 次查询、累计最多 24,000 字节成功结果。失败请求也计次数；预算耗尽返回工具错误，不静默截断知识或任务。
+- 引用保留原片段 ID、文件哈希及原行号范围；`text_offset` / `text_length` 表示原片段内的字符偏移和总长度。分页文本不是新的完整引用范围。
+- 原 PiRunner 的 16,000 字符场景上限保持不变。该限制与模型 token 上限不同；完整系统提示、其他工具及历史对话仍由 Agent 运行时管理。
+
+本地查询一页：
 
 ```powershell
-python -m uav_rag workflow --task task.json --agent-command '["path-to-readonly-agent", "--json"]'
+python -X utf8 -m uav_rag lookup "SM4-GCM 的限制" --services sm4-gcm-v1
 ```
 
-`task.json` 包含 `task_id` 和 `scenario`。所配置命令从 stdin 读取提示，从 stdout 返回一个 JSON 对象。命令必须由部署者配置为只读规划，并使用其真实 JSON 输出模式；不要直接把示例路径当成已安装程序。
+`uav_rag.workflow.run_workflow(task, agent, client)` 现在接收 `agent(scenario, tools)` 回调；回调按需调用 `tools.invoke`。验证最终引用确实出现在本次已读取页面中，返回 `planned` 而非执行成功。旧四参数回调、`augmented_scenario`、`retrieve_for_task` 以及 `workflow --agent-command` 已移除，避免继续走提示词拼接路径。`demo.py` 演示新契约。
 
-## 接入原无人机 PiRunner
+## 接入原无人机 PiRunner / k8s
 
-已有源码位于 `C:\Users\86187\Desktop\pi_uav_k3-codex-service-layout`。这里提供 `uav_rag.pi_runner` 启动覆盖层，无需改动该快照。它继承原 PiRunner，复用任务幂等、执行日志、进程组清理和最终 MCP 回执。
+保留原 `python -m jetson.pi_runner` 入口；`python -m uav_rag.pi_runner` 作为兼容入口也调用原 runner，不再初选或改写 scenario。将 `uav_rag/` 放到原运行镜像的 Python 路径。
 
-部署时把 `uav_rag/` 放入 PiRunner 镜像 Python 路径，保留原项目代码及依赖，将原容器启动入口由 `python -m jetson.pi_runner` 调整为：
+现有 `.mcp.json` 中 `uav-services` 的启动参数由 `-m jetson.edge_agent.mcp_guard` 改为 `-m uav_rag.mcp_guard`。这个覆盖层增加只读查询工具，并继续调用原 Guard 处理所有执行工具。提交单次组合或三阶段计划前，必须实际查询所选认证与加密服务；资料缺失不等于服务不存在，原服务验证规则仍生效。
 
-```bash
-python -m uav_rag.pi_runner
-```
+连接地址和凭证路径必须放进 `pi-runner.json` 的 `environment`，并检查 MCP 配置的 `env` 没有覆盖成其他值；仅在容器外 export 无效，因为原 runner 过滤继承环境。必须每任务启动独立 MCP 进程，避免共用查询预算与已查记录。
 
-保留原 `UAV_PI_RUNNER_CONFIG`，增加：
+完整配置片段、迁移步骤和验收说明见 [按需 RAG 接入说明](ON-DEMAND-RAG.md)。该文包含宿主机隧道与 Pod 回环地址的区别。现有 [旧接口联调记录](RETEST-JETSON-CLOUD.md) 可继续用于旧 `/enrich` 接口测试，不能证明新工具已接入。
 
-```text
-UAV_RAG_URL=http://127.0.0.1:8787
-UAV_RAG_TOKEN_FILE=/rag-client/service.token
-```
-
-第一次 Agent 调用附加 `--no-tools`，只产生候选 JSON；RAG 查询后，第二次调用原 PiRunner，由原 MCP 产生最终选择回执。可用配置字段 `rag_candidate_command` 单独设置初选 Pi 命令（argv 数组，仍附加 `--no-tools`）。检索失败直接保存失败记录，不继续无资料规划；重启行为仍遵循原任务对账语义，不自动重跑模型。
-
-覆盖层也适用于带 `protection_context` 的三阶段任务：原最终规划模式保留，候选资料追加到场景。现有 Agent 的实际输出格式、MCP 权限及冷启动须在 Jetson 实测。当前契约测试使用原 PiRunner 和真实子进程，但模型/MCP 回执由测试替身产生。
-
-如果 RAG 在电脑上、PiRunner 在 Jetson，则 Jetson 的 `127.0.0.1` 并不指向电脑。可在边缘建立到 RAG 主机的 SSH 本地转发，或使用有受信证书的 HTTPS 地址。RAG 客户端拒绝远端明文 HTTP。这里仅配置新的 RAG 地址，不把原任务、身份认证和飞控端点整体替换成本机。
+其他支持 stdio MCP 的 Agent 可单独配置 `python -m uav_rag.mcp`，它只暴露知识工具，没有服务执行权限。已有 UAV 应使用组合 Guard 入口，以保留提交前的查询检查。
 
 ## 缺少服务时下载
 
@@ -150,4 +156,4 @@ python -X utf8 -m unittest discover -s tests -v
 
 Docker 模式：从当前目录构建 Dockerfile，挂载 `/data` 为只读数据库目录，通过 `UAV_RAG_TOKEN_FILE` 挂载只读令牌文件。对外绑定要求令牌，容器内用户为 1000。镜像尚未在本机构建或启动。
 
-目前已完成本地数据库、API、客户端、覆盖层和联调测试。未连接云端、未运行真实模型、未更改 Jetson 的服务副本。发布前仍需明确目标云端主机、账号/SSH 配置和部署目录，真实 OCI 服务归档由现有发布链提供。
+目前已完成本地数据库、分页 API、客户端、MCP 工具覆盖层和联调测试。本次改动未部署到云端或 Jetson，未运行真实模型、未更改 k8s 服务副本。发布前仍需明确目标云端主机、账号/SSH 配置和部署目录，真实 OCI 服务归档由现有发布链提供。

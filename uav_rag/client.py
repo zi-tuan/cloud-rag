@@ -28,8 +28,33 @@ class RagClient:
         headers = {'Content-Type':'application/json'}
         if self.token:
             headers['Authorization'] = 'Bearer '+self.token
-        request = Request(self.url+path, None if data is None else json.dumps(data).encode(), headers)
+        from .retrieval import encoded
+        request = Request(self.url+path, None if data is None else encoded(data), headers)
         return self.opener.open(request, timeout=self.timeout)
+
+    def query(self, query, candidates, *, top_k=1, cursor=None, max_bytes=6000):
+        from .catalog import service_id
+        from .retrieval import encoded
+        if type(max_bytes) is not int or not 4096 <= max_bytes <= 12000:
+            raise ValueError('invalid page budget')
+        data = dict(query=query, candidate_services=candidates, top_k=top_k, max_bytes=max_bytes)
+        if cursor is not None:
+            data['cursor'] = cursor
+        with self.request('/v1/knowledge/query', data) as response:
+            raw = response.read(max_bytes+1)
+        if len(raw) > max_bytes:
+            raise ValueError('oversized knowledge page')
+        result = json.loads(raw)
+        expected = {service_id(c) for c in candidates}
+        if (not isinstance(result, dict) or not isinstance(result.get('items'), list)
+                or not result['items'] or len(encoded(result)) > max_bytes
+                or any(not isinstance(item, dict) or item.get('service_id') not in expected
+                       for item in result['items'])
+                or not isinstance(result.get('index_revision'), str)
+                or not isinstance(result.get('description_revision'), str)
+                or not (result.get('next_cursor') is None or isinstance(result['next_cursor'], str))):
+            raise ValueError('invalid knowledge page')
+        return result
 
     def enrich(self, task_id, query, candidates, top_k=3):
         with self.request('/v1/services/enrich', dict(task_id=task_id, query=query, candidate_services=candidates, top_k=top_k)) as response:

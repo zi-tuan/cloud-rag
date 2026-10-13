@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 
 from .catalog import SERVICES
+from .retrieval import query_page, encoded
 
 
 class Artifacts:
@@ -72,7 +73,7 @@ def make_server(kb, host='127.0.0.1', port=8787, *, token=None, artifacts=None):
             pass  # Do not log tasks, authorization headers, or source excerpts.
 
         def send_json(self, status, value):
-            raw = json.dumps(value, ensure_ascii=False, allow_nan=False).encode('utf-8')
+            raw = encoded(value)
             self.send_response(status)
             self.send_header('Content-Type','application/json; charset=utf-8')
             self.send_header('Content-Length',str(len(raw)))
@@ -113,7 +114,7 @@ def make_server(kb, host='127.0.0.1', port=8787, *, token=None, artifacts=None):
         def do_POST(self):
             if not self.authorized():
                 return
-            if self.path != '/v1/services/enrich':
+            if self.path not in ('/v1/services/enrich', '/v1/knowledge/query'):
                 return self.send_json(404, {'error':'not_found'})
             try:
                 length = int(self.headers.get('Content-Length','0'))
@@ -124,6 +125,8 @@ def make_server(kb, host='127.0.0.1', port=8787, *, token=None, artifacts=None):
                 raw = self.rfile.read(length)
                 if len(raw) != length:
                     raise ValueError('incomplete request')
+                if self.path == '/v1/knowledge/query':
+                    return self.send_json(200, query_page(kb, json.loads(raw)))
                 result = kb.enrich(json.loads(raw))
                 for service in result['services']:
                     service['artifact'] = artifacts.describe(service['service_id'])
