@@ -48,7 +48,12 @@ SQLite 的 `chunks` 表保存原文、相对路径、起止行号、文件 SHA-2
 - `binding`：`auth_policy` 或 `suite` 的映射，供现有选择协议使用。
 - `evidence_status`：`available`、`insufficient` 或 `not_found`。
 - `citations`：原文及 `path/start_line/end_line/sha256/id`。
+- `description`：算法的一般用途 `purpose`、优点与选择条件 `advantages`、缺点与限制 `limitations`，以及参考文献 `sources`。覆盖全部 8 项登记能力；其中签名、摘要、密钥派生和证书校验不等同于数据加密。
 - `artifact`：云端是否实际登记了兼容的可下载归档；默认 unavailable。
+
+算法描述维护在 `uav_rag/descriptions.py`，执行 `index` 后写入 SQLite 的 `algorithm_descriptions` 表；补充接口按候选服务 ID 从数据库读取，不依赖源码关键词是否命中。修改描述后需重建索引并重启服务。数据库 schema 为 2，旧 schema 1 必须用上面的 `index` 命令重建。元数据 `description_count` 和 `description_revision` 分别记录描述数量与内容哈希，原 `revision` 仍标识 GmSSL 源码语料。
+
+描述属于带参考来源的人工整理知识，不是服务实现或部署证明。因此 RSA、Ed25519 即使有描述，其原有 `evidence_status` 和源码引用也不会自动提升。Agent 会收到完整描述（PiRunner 仅截短源码引用），并结合用途、优点和限制说明选型理由；通用性能判断不替代目标设备实测。
 
 `GET /v1/services` 返回知识服务目录；`GET /health` 返回索引版本；`GET /v1/artifacts/{service_id}` 只提供登记的归档。
 

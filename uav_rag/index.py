@@ -9,8 +9,9 @@ import tempfile
 from contextlib import closing
 
 from .catalog import SERVICES, service_id
+from .descriptions import DESCRIPTIONS
 
-SCHEMA = 1
+SCHEMA = 2
 EXPANSIONS = {'加密': 'encrypt encryption', '解密': 'decrypt', '签名': 'sign signature',
               '验签': 'verify signature', '认证': 'authentication verify', '证书': 'x509 certificate',
               '撤销': 'crl revoke', '摘要': 'digest hash', '派生': 'hkdf derive',
@@ -42,6 +43,9 @@ def build(source, output):
         with closing(sqlite3.connect(temporary)) as db:
             db.executescript('''
                 CREATE TABLE metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+                CREATE TABLE algorithm_descriptions (service_id TEXT PRIMARY KEY,
+                    purpose TEXT NOT NULL, advantages TEXT NOT NULL,
+                    limitations TEXT NOT NULL, sources TEXT NOT NULL);
                 CREATE TABLE chunks (id TEXT PRIMARY KEY, path TEXT, start_line INTEGER,
                     end_line INTEGER, sha256 TEXT, text TEXT, search_text TEXT);
                 CREATE VIRTUAL TABLE search USING fts5(search_text, content='chunks', content_rowid='rowid');
@@ -72,8 +76,18 @@ def build(source, output):
                     count += 1
             if not count:
                 raise ValueError('empty corpus')
+            if set(DESCRIPTIONS) != set(SERVICES):
+                raise ValueError('algorithm descriptions must cover the service catalog')
+            for identifier, description in sorted(DESCRIPTIONS.items()):
+                db.execute('INSERT INTO algorithm_descriptions VALUES (?,?,?,?,?)',
+                    (identifier, description['purpose'],
+                     *(json.dumps(description[key], ensure_ascii=False) for key in
+                       ('advantages', 'limitations', 'sources'))))
+            description_revision = hashlib.sha256(json.dumps(
+                DESCRIPTIONS, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
             revision = hashlib.sha256(json.dumps(documents, separators=(',', ':')).encode()).hexdigest()
             metadata = dict(schema=SCHEMA, corpus='GmSSL', revision=revision, documents=len(documents), chunks=count,
+                            description_count=len(DESCRIPTIONS), description_revision=description_revision,
                             retrieval='SQLite FTS5 BM25; Chinese bigrams and controlled query expansion')
             db.executemany('INSERT INTO metadata VALUES (?,?)', [(k, json.dumps(v)) for k,v in metadata.items()])
             db.execute("INSERT INTO search(search) VALUES('rebuild')")
@@ -92,7 +106,7 @@ class KnowledgeBase:
         with closing(self.connect()) as db:
             self.metadata = {r[0]: json.loads(r[1]) for r in db.execute('SELECT key,value FROM metadata')}
         if self.metadata.get('schema') != SCHEMA:
-            raise ValueError('unsupported index version')
+            raise ValueError('unsupported index version; rebuild with the index command')
 
     def connect(self):
         db = sqlite3.connect(self.path.as_uri()+'?mode=ro', uri=True)
@@ -141,7 +155,13 @@ class KnowledgeBase:
                     note='服务未登记，不能凭模型名称下载或启动。', binding={}))
                 continue
             citations = self.search(entry['terms']+' '+query, paths=entry['paths'], limit=limit)
+            with closing(self.connect()) as db:
+                row = db.execute('SELECT * FROM algorithm_descriptions WHERE service_id=?',
+                                 (candidate,)).fetchone()
+            description = None if row is None else dict(purpose=row['purpose'],
+                **{key: json.loads(row[key]) for key in ('advantages', 'limitations', 'sources')})
             results.append(dict(service_id=candidate, label=entry['label'], binding=entry['binding'],
+                description=description,
                 evidence_status=entry['evidence'] if citations else 'not_found', citations=citations,
                 note=entry.get('note', 'GmSSL 源码资料；不证明无人机镜像已实现此接口或已就绪。')))
         return dict(task_id=task_id, corpus=self.metadata, services=results,
