@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pi-runtime
+  namespace: uav-mvp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pi-runtime
+  template:
+    metadata:
+      labels:
+        app: pi-runtime
+    spec:
+      serviceAccountName: uav-agent
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+        - name: pi
+          image: docker.io/library/node@sha256:f71fb9ca71b1b47d4d1a009af78147ed6cdc74f9c7cfc36cbde78ff985169051
+          imagePullPolicy: IfNotPresent
+          command: ["sleep", "infinity"]
+          workingDir: /workspace/project
+          env:
+            - name: HOME
+              value: /home/node
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "3"
+              memory: 3Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          readinessProbe:
+            exec:
+              command: [node, --version]
+            initialDelaySeconds: 3
+            periodSeconds: 15
+          volumeMounts:
+            - name: source
+              mountPath: /workspace/pi
+            - name: home
+              mountPath: /home/node
+            - name: binaries
+              mountPath: /opt/uav/bin
+              readOnly: true
+            - name: project
+              mountPath: /workspace/project
+      volumes:
+        - name: source
+          hostPath:
+            path: /home/uav/uav-agent-mvp/src/pi
+            type: Directory
+        - name: home
+          hostPath:
+            path: /home/uav/uav-agent-mvp/pi-home
+            type: Directory
+        - name: binaries
+          hostPath:
+            path: /home/uav/uav-agent-mvp/bin
+            type: Directory
+        - name: project
+          hostPath:
+            path: /home/uav/uav-agent-mvp/project
+            type: Directory

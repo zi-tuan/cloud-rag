@@ -1,0 +1,54 @@
+{
+  "amd64": {
+    "image": "uav-auth-ed25519:amd64-8b21caf84a91",
+    "image_id": "sha256:8b21caf84a91188d973933efc2f07d2ac4be418aa5586d1acb070e46f6fa4845",
+    "archive_sha256": "ef4c2a8d3322c4ee868c34a7a776a14b8146a1aee5e43ca5ad40e554e40031f2",
+    "base_digest": "sha256:1aaa65a85fda306ffb8b910824d4e93bdce61e212c7e87168123ea3073b41a1a",
+    "source_layer_sha256": "ad9a986bd5bf509bf8232dc71650fad30703faab697316492007c6c19ca73fe6",
+    "wheels": {
+      "annotated_doc-0.0.5-py3-none-any.whl": "117bac03a25ede5df5440e855b32d556049ca169ead221505badf432fed4b101",
+      "annotated_types-0.7.0-py3-none-any.whl": "1f02e8b43a8fbbc3f3e0d4f0f4bfc8131bcb4eebe8849b8e5c773f3a1c582a53",
+      "anyio-4.13.0-py3-none-any.whl": "08b310f9e24a9594186fd75b4f73f4a4152069e3853f1ed8bfbf58369f4ad708",
+      "cffi-2.1.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl": "c1453022f490d2459a11819d83ad1d586e9ff65a12ac3e705ffebd46d3685dcf",
+      "click-8.3.2-py3-none-any.whl": "1924d2c27c5653561cd2cae4548d1406039cb79b858b747cfea24924bbc1616d",
+      "colorama-0.4.6-py2.py3-none-any.whl": "4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6",
+      "cryptography-48.0.0-cp311-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.whl": "7995ef305d7165c3f11ae07f2517e5a4f1d5c18da1376a0a9ed496336b69e5f3",
+      "fastapi-0.135.2-py3-none-any.whl": "0af0447d541867e8db2a6a25c23a8c4bd80e2394ac5529bd87501bbb9e240ca5",
+      "h11-0.16.0-py3-none-any.whl": "63cf8bbe7522de3bf65932fda1d9c2772064ffb3dae62d55932da54b31cb6c86",
+      "idna-3.11-py3-none-any.whl": "771a87f49d9defaf64091e6e6fe9c18d4833f140bd19464795bc32d966ca37ea",
+      "pycparser-3.0-py3-none-any.whl": "b727414169a36b7d524c1c3e31839a521725078d7b2ff038656844266160a992",
+      "pydantic-2.13.4-py3-none-any.whl": "45a282cde31d808236fd7ea9d919b128653c8b38b393d1c4ab335c62924d9aba",
+      "pydantic_core-2.46.4-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl": "926c9541b14b12b1681dca8a0b75feb510b06c6341b70a8e500c2fdcff837cce",
+      "starlette-1.1.0-py3-none-any.whl": "7f0dfd38e428aad5cb6f9f667f0ca1d2d8ca3f3385dccac8305f79ec98458382",
+      "typing_extensions-4.15.0-py3-none-any.whl": "f0fa19c6845758ab08074a0cfa8b7aecb71c999ca73d62883bc25cc018c4e548",
+      "typing_inspection-0.4.2-py3-none-any.whl": "4ed1cacbdc298c220f1bd249ed5287caa16f34d44ef4e9c3d0cbad5b521545e7",
+      "uvicorn-0.48.0-py3-none-any.whl": "48097851328b87ec36117d3d575234519eb58c2b22d79666e9bbc6c49a761dad"
+    }
+  },
+  "arm64": {
+    "image": "uav-auth-ed25519:arm64-d2b3fc6676e0",
+    "image_id": "sha256:d2b3fc6676e0a5d254d361475eba62e4c7d7805d14e245666399bff4f7080223",
+    "archive_sha256": "06a274a01a418eee1ac7898da526b442fd1524811b4f0bb51cddb48a3b14ada8",
+    "base_digest": "sha256:eb5be8e5b4d0a159c237946bbdd06356dda5d19c30fc4f7843e8046d3a590333",
+    "source_layer_sha256": "66180618f523dcad6cc13c9c7ab11e0cf1709cdb74e069ee9e6da949d6e08568",
+    "wheels": {
+      "annotated_doc-0.0.5-py3-none-any.whl": "117bac03a25ede5df5440e855b32d556049ca169ead221505badf432fed4b101",
+      "annotated_types-0.7.0-py3-none-any.whl": "1f02e8b43a8fbbc3f3e0d4f0f4bfc8131bcb4eebe8849b8e5c773f3a1c582a53",
+      "anyio-4.13.0-py3-none-any.whl": "08b310f9e24a9594186fd75b4f73f4a4152069e3853f1ed8bfbf58369f4ad708",
+      "cffi-2.1.1-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.whl": "68e62fe11f30d5ca8289242866f0a5291402d8529ca2178ab8afc5c9694ae890",
+      "click-8.3.2-py3-none-any.whl": "1924d2c27c5653561cd2cae4548d1406039cb79b858b747cfea24924bbc1616d",
+      "colorama-0.4.6-py2.py3-none-any.whl": "4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6",
+      "cryptography-48.0.0-cp311-abi3-manylinux_2_28_aarch64.whl": "40ba1f85eaa6959837b1d51c9767e230e14612eea4ef110ee8854ada22da1bf5",
+      "fastapi-0.135.2-py3-none-any.whl": "0af0447d541867e8db2a6a25c23a8c4bd80e2394ac5529bd87501bbb9e240ca5",
+      "h11-0.16.0-py3-none-any.whl": "63cf8bbe7522de3bf65932fda1d9c2772064ffb3dae62d55932da54b31cb6c86",
+      "idna-3.11-py3-none-any.whl": "771a87f49d9defaf64091e6e6fe9c18d4833f140bd19464795bc32d966ca37ea",
+      "pycparser-3.0-py3-none-any.whl": "b727414169a36b7d524c1c3e31839a521725078d7b2ff038656844266160a992",
+      "pydantic-2.13.4-py3-none-any.whl": "45a282cde31d808236fd7ea9d919b128653c8b38b393d1c4ab335c62924d9aba",
+      "pydantic_core-2.46.4-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl": "8233f2947cf85404441fd7e0085f53b10c93e0ee78611099b5c7237e36aacbf7",
+      "starlette-1.1.0-py3-none-any.whl": "7f0dfd38e428aad5cb6f9f667f0ca1d2d8ca3f3385dccac8305f79ec98458382",
+      "typing_extensions-4.15.0-py3-none-any.whl": "f0fa19c6845758ab08074a0cfa8b7aecb71c999ca73d62883bc25cc018c4e548",
+      "typing_inspection-0.4.2-py3-none-any.whl": "4ed1cacbdc298c220f1bd249ed5287caa16f34d44ef4e9c3d0cbad5b521545e7",
+      "uvicorn-0.48.0-py3-none-any.whl": "48097851328b87ec36117d3d575234519eb58c2b22d79666e9bbc6c49a761dad"
+    }
+  }
+}

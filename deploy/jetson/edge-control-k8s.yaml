@@ -1,0 +1,347 @@
+# 渲染输入：使用 python -m deploy.scripts.render_layout，不直接 apply。
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: uav-edge-control-config
+  namespace: uav-mvp
+data:
+  edge.json: |
+    {
+      "device_id": "jetson-uav-01",
+      "key_id": "bootstrap-01",
+      "initial_epoch": "bootstrap-aes-01",
+      "initial_suite": "AES-256-GCM",
+      "crypto_services": {
+        "AES-256-GCM": "http://aes-service.uav-mvp.svc:8080",
+        "SM4-GCM": "http://sm4-service.uav-mvp.svc:8080"
+      },
+      "service_token_file": "/keys/service.token",
+      "identity_auth": {
+        "service_url": "http://auth-ed25519.uav-mvp.svc:8080",
+        "token_file": "/auth-client/service.token",
+        "cloud_id": "uav-cloud-01",
+        "credential_version": "1"
+      },
+      "switch_state": "/state/switch.db",
+      "execution_state": "/state/execution.db",
+      "catalog": "/opt/uav/app/jetson/edge_agent/config/service-catalog.json",
+      "pi_socket": "/run/uav-pi/pi.sock",
+      "cloud_url": "http://47.109.49.98:38443/api/edge/exchange",
+      "log_file": "/state/edge.log",
+      "mavlink_data": "tcp:192.168.8.110:5763",
+      "manual_simulation_flight": "tcp:192.168.8.110:5762",
+      "mavlinkRate": 1,
+      "heartbeatTimeout": 20,
+      "trust_start": false
+    }
+  pi-runner.json: |
+    {
+      "journal": "/pi-state/executions.db",
+      "mcp_guard_config": "/opt/uav/config/mcp-guard.json",
+      "receipts": "/pi-state/receipts",
+      "socket": "/run/uav-pi/pi.sock",
+      "working_directory": "/workspace/project",
+      "timeout_seconds": 180,
+      "command": ["/opt/uav/bin/aivo", "pi", "--model", "mdoelscope1::Qwen/Qwen3.5-35B-A3B", "--", "--print", "--thinking", "off"],
+      "environment": {
+        "HOME": "/home/node",
+        "USER": "node",
+        "LOGNAME": "node",
+        "PATH": "/opt/uav/bin:/usr/local/bin:/usr/bin:/bin",
+        "PYTHONPATH": "/opt/uav/vendor:/opt/uav/app",
+        "UAV_MCP_GUARD_CONFIG": "/opt/uav/config/mcp-guard.json"
+      }
+    }
+  mcp-guard.json: |
+    {
+      "catalog": "/opt/uav/app/jetson/edge_agent/config/service-catalog.json",
+      "templates": "/opt/uav/app/jetson/edge_agent/config/service-templates.json",
+      "selection_file": "/run/uav-selection/selection.json",
+      "writes_enabled": true,
+      "upstream_command": [
+        "/opt/uav/bin/kubernetes-mcp-server",
+        "--cluster-provider", "in-cluster",
+        "--disable-multi-cluster", "--toolsets", "core"
+      ]
+    }
+  .mcp.json: |
+    {
+      "mcpServers": {
+        "uav-services": {
+          "command": "/usr/local/bin/python",
+          "args": ["-m", "jetson.edge_agent.mcp_guard"],
+          "env": {
+            "PYTHONPATH": "/opt/uav/vendor:/opt/uav/app",
+            "UAV_MCP_GUARD_CONFIG": "/opt/uav/config/mcp-guard.json"
+          },
+          "lifecycle": "eager"
+        }
+      }
+    }
+  AGENTS.md: |
+    # UAV 防护规划
+
+    使用 uav_services、uav_authentication_policies、uav_protection_profiles 读取登记能力。
+    根据目标、风险、资源和当前状态选择算法，默认使用中文说明选择依据。
+
+    持续航线任务：调用 uav_protection_plan，提交 phases 与 rationale。
+    phases 依次为 transit、risk、exit，每项含 stage、target、reason。
+    target 含 auth_policy、suite、protection_profile；防护等级依次为
+    lightweight、enhanced、lightweight。期限与配额以登记策略为准。
+
+    单次切换任务：调用 uav_combination_select，提交 auth_policy、suite、
+    protection_profile；只改认证时 suite=null，保留当前防护等级。
+
+    结构化工具回执构成规划证据；双端认证、切换和真实业务验收由确定性执行器负责。
+    能力或资源不足时报告保护目标未满足。可信状态由验证底座提供，缺失为 unknown。
+    身份私钥或 root_key 泄露需要吊销重建，切换不能恢复可信。首版只调整通信防护。
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pi-runner
+  namespace: uav-mvp
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: pi-runner
+  template:
+    metadata:
+      labels:
+        app: pi-runner
+    spec:
+      serviceAccountName: uav-agent
+      automountServiceAccountToken: true
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+      - name: pi-runner
+        image: RENDER_REQUIRED_PI_RUNNER
+        imagePullPolicy: Never
+        command:
+        - python
+        - -m
+        - jetson.pi_runner
+        env:
+        - name: UAV_PI_RUNNER_CONFIG
+          value: /opt/uav/config/pi-runner.json
+        - name: PYTHONPATH
+          value: /opt/uav/vendor:/opt/uav/app
+        - name: PYTHONDONTWRITEBYTECODE
+          value: '1'
+        - name: PYTHONUNBUFFERED
+          value: '1'
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: '2'
+            memory: 2Gi
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        readinessProbe:
+          exec:
+            command:
+            - python
+            - -c
+            - import socket; s=socket.socket(socket.AF_UNIX); s.connect('/run/uav-pi/pi.sock');
+              s.close()
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        volumeMounts:
+        - name: config
+          mountPath: /opt/uav/config
+          readOnly: true
+        - name: project-mcp
+          mountPath: /workspace/project/.mcp.json
+          subPath: .mcp.json
+          readOnly: true
+        - name: project-instructions
+          mountPath: /workspace/project/AGENTS.md
+          subPath: AGENTS.md
+          readOnly: true
+        - name: binaries
+          mountPath: /opt/uav/bin
+          readOnly: true
+        - name: project
+          mountPath: /workspace/project
+        - name: home
+          mountPath: /home/node
+        - name: pi-state
+          mountPath: /pi-state
+        - name: pi-source
+          mountPath: /workspace/pi
+          readOnly: true
+        - name: pi-socket
+          mountPath: /run/uav-pi
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: config
+        configMap:
+          name: uav-edge-control-config
+          items:
+          - key: pi-runner.json
+            path: pi-runner.json
+          - key: mcp-guard.json
+            path: mcp-guard.json
+      - name: project-mcp
+        configMap:
+          name: uav-edge-control-config
+          items:
+          - key: .mcp.json
+            path: .mcp.json
+      - name: project-instructions
+        configMap:
+          name: uav-edge-control-config
+          items:
+          - key: AGENTS.md
+            path: AGENTS.md
+      - name: binaries
+        hostPath:
+          path: /home/uav/uav-agent-mvp/bin
+          type: Directory
+      - name: project
+        hostPath:
+          path: /home/uav/uav-agent-mvp/project
+          type: Directory
+      - name: home
+        hostPath:
+          path: /home/uav/uav-agent-mvp/pi-home
+          type: Directory
+      - name: pi-state
+        hostPath:
+          path: /home/uav/uav-agent-mvp/control/pi-runner
+          type: Directory
+      - name: pi-source
+        hostPath:
+          path: /home/uav/uav-agent-mvp/src/pi
+          type: Directory
+      - name: pi-socket
+        hostPath:
+          path: /home/uav/uav-agent-mvp/control/pi-socket
+          type: Directory
+      - name: tmp
+        emptyDir:
+          sizeLimit: 256Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: uav-edge-agent
+  namespace: uav-mvp
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: uav-edge-agent
+  template:
+    metadata:
+      labels:
+        app: uav-edge-agent
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      automountServiceAccountToken: false
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+      - name: edge-agent
+        image: RENDER_REQUIRED_EDGE_AGENT
+        imagePullPolicy: Never
+        command:
+        - python
+        - -m
+        - jetson.edge_agent.runtime
+        env:
+        - name: UAV_EDGE_CONFIG
+          value: /opt/uav/config/edge.json
+        - name: PYTHONPATH
+          value: /opt/uav/vendor:/opt/uav/app
+        - name: PYTHONDONTWRITEBYTECODE
+          value: '1'
+        - name: PYTHONUNBUFFERED
+          value: '1'
+        ports: []
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: '1'
+            memory: 512Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        readinessProbe:
+          exec:
+            command:
+            - python
+            - -c
+            - import urllib.request; r=urllib.request.urlopen('http://47.109.49.98:38443/openapi.json',timeout=3);
+              assert r.status==200; r.close()
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 5
+        volumeMounts:
+        - name: config
+          mountPath: /opt/uav/config
+          readOnly: true
+        - name: edge-state
+          mountPath: /state
+        - name: pi-socket
+          mountPath: /run/uav-pi
+        - name: service-token
+          mountPath: /keys
+          readOnly: true
+        - name: auth-client
+          mountPath: /auth-client
+          readOnly: true
+      volumes:
+      - name: config
+        configMap:
+          name: uav-edge-control-config
+          items:
+          - key: edge.json
+            path: edge.json
+      - name: edge-state
+        hostPath:
+          path: /home/uav/uav-agent-mvp/control/edge
+          type: Directory
+      - name: pi-socket
+        hostPath:
+          path: /home/uav/uav-agent-mvp/control/pi-socket
+          type: Directory
+      - name: service-token
+        secret:
+          secretName: crypto-identity
+          defaultMode: 288
+          items:
+          - key: service.token
+            path: service.token
+      - name: auth-client
+        secret:
+          secretName: uav-auth-client
+          defaultMode: 288
+          items:
+          - key: service.token
+            path: service.token

@@ -1,0 +1,10 @@
+{
+  "catalog": "/opt/uav/app/jetson/edge_agent/config/service-catalog.json",
+  "templates": "/opt/uav/app/jetson/edge_agent/config/service-templates.json",
+  "writes_enabled": false,
+  "upstream_command": [
+    "/opt/uav/bin/kubernetes-mcp-server",
+    "--cluster-provider", "in-cluster",
+    "--disable-multi-cluster", "--toolsets", "core"
+  ]
+}

@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "services": [
+    {
+      "id": "aes-gcm-v1",
+      "suite": "AES-256-GCM",
+      "capabilities": [
+        "authenticated-encryption",
+        "aes"
+      ],
+      "image": "47.109.49.98:30881/uav-mvp/crypto-service@sha256:e3415bcc66c14512ccdc404a7a15a015b872314ebb6c9b0ee2b30256fbf098f7",
+      "architecture": "arm64",
+      "interface_version": "v1",
+      "namespace": "uav-mvp",
+      "deployment": "aes-service",
+      "replicas": 1,
+      "health_path": "/ready",
+      "registry_verified": true,
+      "resources": {
+        "requests": {
+          "cpu": "50m",
+          "memory": "64Mi"
+        },
+        "limits": {
+          "cpu": "1",
+          "memory": "256Mi"
+        }
+      }
+    },
+    {
+      "id": "sm4-gcm-v1",
+      "suite": "SM4-GCM",
+      "capabilities": [
+        "authenticated-encryption",
+        "sm4"
+      ],
+      "image": "47.109.49.98:30881/uav-mvp/crypto-service@sha256:e3415bcc66c14512ccdc404a7a15a015b872314ebb6c9b0ee2b30256fbf098f7",
+      "architecture": "arm64",
+      "interface_version": "v1",
+      "namespace": "uav-mvp",
+      "deployment": "sm4-service",
+      "replicas": 1,
+      "health_path": "/ready",
+      "registry_verified": true,
+      "resources": {
+        "requests": {
+          "cpu": "50m",
+          "memory": "64Mi"
+        },
+        "limits": {
+          "cpu": "1",
+          "memory": "256Mi"
+        }
+      }
+    }
+  ]
+}

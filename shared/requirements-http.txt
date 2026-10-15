@@ -1,0 +1,15 @@
+fastapi==0.135.2
+uvicorn==0.48.0
+starlette==1.1.0
+pydantic==2.13.4
+pydantic-core==2.46.4
+annotated-doc==0.0.5
+annotated-types==0.7.0
+typing-extensions==4.15.0
+typing-inspection==0.4.2
+anyio==4.13.0
+idna==3.11
+click==8.3.2
+h11==0.16.0
+sqlalchemy==2.0.54
+greenlet==3.2.4

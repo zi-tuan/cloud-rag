@@ -1,0 +1,44 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: uav-mvp
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: uav-agent
+  namespace: uav-mvp
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: uav-agent
+  namespace: uav-mvp
+rules:
+  - apiGroups: [""]
+    resources: [pods, services, events]
+    verbs: [get, list, watch]
+  - apiGroups: [""]
+    resources: [pods/log]
+    verbs: [get]
+  - apiGroups: [apps]
+    resources: [deployments, replicasets]
+    verbs: [get, list, watch]
+  - apiGroups: [apps]
+    resources: [deployments/scale]
+    resourceNames: [aes-service, sm4-service]
+    verbs: [get, update]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: uav-agent
+  namespace: uav-mvp
+subjects:
+  - kind: ServiceAccount
+    name: uav-agent
+    namespace: uav-mvp
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: uav-agent

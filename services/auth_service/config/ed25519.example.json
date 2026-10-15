@@ -1,0 +1,15 @@
+{
+  "role": "edge",
+  "device_id": "jetson-uav-01",
+  "cloud_id": "uav-cloud-01",
+  "credential_version": "1",
+  "private_key_file": "/identity/private.pem",
+  "peer_public_key_file": "/identity/peer.pem",
+  "token_file": "/identity/service.token",
+  "not_before": 1790784000,
+  "not_after": 1822320000,
+  "revoked": false,
+  "bind": "0.0.0.0",
+  "port": 8080,
+  "policy": "Ed25519"
+}

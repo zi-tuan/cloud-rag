@@ -1,0 +1,7 @@
+{
+  "image": "uav-cloud-control:transition-e3415bcc66c1",
+  "image_id": "sha256:217ae191484b6c6cf3522b4addeda5c34fc02486a476733b2f3ddaa9e32b456c",
+  "architecture": "amd64",
+  "base_digest": "sha256:1aaa65a85fda306ffb8b910824d4e93bdce61e212c7e87168123ea3073b41a1a",
+  "parent_image": "sha256:1d1a206f1a414bf8cb9513dee385c407b3f585f97b2bc629714ce1b8f5a963de"
+}

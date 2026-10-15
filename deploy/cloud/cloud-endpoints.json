@@ -1,0 +1,21 @@
+{
+  "publicHost": "47.109.49.98",
+  "accessMode": "nps",
+  "ports": {
+    "publicGatewaySsh": 22,
+    "mainServerSsh": 24531,
+    "mainServerRemoteDesktop": 28282,
+    "npsManagement": 42034,
+    "kubernetesManagement": 30880,
+    "harborManagement": 30881,
+    "rabbitmqManagement": 30882,
+    "rabbitmqAmqp": 30883,
+    "mysql": 30884,
+    "taskApiHttp": 38443,
+    "harborHttp": 35443
+  },
+  "npsTunnelIds": {
+    "taskApiHttp": 553,
+    "harborHttp": 554
+  }
+}

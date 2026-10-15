@@ -1,0 +1,28 @@
+{
+  "device_id": "jetson-uav-01",
+  "key_id": "bootstrap-01",
+  "initial_epoch": "bootstrap-aes-01",
+  "initial_suite": "AES-256-GCM",
+  "crypto_services": {
+    "AES-256-GCM": "http://aes-service.uav-mvp.svc:8080",
+    "SM4-GCM": "http://sm4-service.uav-mvp.svc:8080"
+  },
+  "service_token_file": "/keys/service.token",
+  "identity_auth": {
+    "service_url": "http://auth-ed25519.uav-mvp.svc:8080",
+    "token_file": "/auth-client/service.token",
+    "cloud_id": "uav-cloud-01",
+    "credential_version": "1"
+  },
+  "switch_state": "/state/switch.db",
+  "execution_state": "/state/execution.db",
+  "catalog": "/opt/uav/app/jetson/edge_agent/config/service-catalog.json",
+  "pi_socket": "/run/uav-pi/pi.sock",
+  "cloud_url": "http://47.109.49.98:38443/api/edge/exchange",
+  "log_file": "/state/edge.log",
+  "mavlink_data": "tcp:192.168.8.110:5763",
+  "manual_simulation_flight": "tcp:192.168.8.110:5762",
+  "mavlinkRate": 1,
+  "heartbeatTimeout": 20,
+  "trust_start": false
+}

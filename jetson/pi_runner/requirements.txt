@@ -1,0 +1,2 @@
+-r ../../shared/requirements.txt
+PyYAML==6.0.3

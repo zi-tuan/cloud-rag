@@ -1,0 +1,12 @@
+{
+  "suite": "AES-256-GCM",
+  "device_id": "jetson-uav-01",
+  "key_id": "bootstrap-01",
+  "role": "edge",
+  "key_file": "/keys/root.key",
+  "token_file": "/keys/service.token",
+  "state_path": "/state/messages.db",
+  "initialize": false,
+  "bind": "0.0.0.0",
+  "port": 8080
+}

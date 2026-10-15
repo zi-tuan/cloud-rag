@@ -1,0 +1,28 @@
+{
+  "journal": "/pi-state/executions.db",
+  "receipts": "/pi-state/receipts",
+  "socket": "/run/uav-pi/pi.sock",
+  "working_directory": "/workspace/project",
+  "timeout_seconds": 180,
+  "command": [
+    "/opt/uav/bin/aivo",
+    "pi",
+    "--model",
+    "sensenova::sensenova-6.8-flash-lite",
+    "--",
+    "--print",
+    "--thinking",
+    "off"
+  ],
+  "environment": {
+    "HOME": "/home/node",
+    "USER": "node",
+    "LOGNAME": "node",
+    "PATH": "/opt/uav/bin:/usr/local/bin:/usr/bin:/bin",
+    "PYTHONPATH": "/opt/uav/vendor:/opt/uav/app",
+    "UAV_MCP_GUARD_CONFIG": "/opt/uav/config/mcp-guard.json",
+    "UAV_RAG_URL": "https://RAG_HOST_REPLACE",
+    "UAV_RAG_TOKEN_FILE": "/rag-client/service.token"
+  },
+  "mcp_guard_config": "/opt/uav/config/mcp-guard.json"
+}

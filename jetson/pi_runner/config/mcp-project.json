@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "kubernetes": {
+      "command": "/opt/uav/bin/kubernetes-mcp-server",
+      "args": ["--cluster-provider", "in-cluster", "--disable-multi-cluster", "--read-only", "--toolsets", "core"],
+      "lifecycle": "eager"
+    }
+  }
+}

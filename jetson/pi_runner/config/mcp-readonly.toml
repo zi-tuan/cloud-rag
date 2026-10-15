@@ -1,0 +1,8 @@
+server_instructions = "本项目命名空间为 uav-mvp。查询 Pod 使用 pods_list_in_namespace(namespace=uav-mvp)。查询 Deployment 使用 resources_list(apiVersion=apps/v1,kind=Deployment,namespace=uav-mvp)。所有命名空间资源查询显式指定 uav-mvp。工具成功结果才是事实依据。"
+disabled_tools = ["pods_list", "namespaces_list", "nodes_top"]
+
+[tool_overrides.pods_list_in_namespace]
+description = "查询 UAV 项目的 Pod。namespace 必须传 uav-mvp。用户泛指 Pod 时使用本工具。"
+
+[tool_overrides.resources_list]
+description = "查询 UAV 项目的资源，显式传 namespace=uav-mvp。Deployment 参数为 apiVersion=apps/v1, kind=Deployment；Pod 参数为 apiVersion=v1, kind=Pod。"

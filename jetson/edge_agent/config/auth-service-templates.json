@@ -1,0 +1,194 @@
+{
+  "apiVersion": "v1",
+  "kind": "List",
+  "items": [
+    {
+      "apiVersion": "v1",
+      "kind": "ConfigMap",
+      "metadata": {
+        "name": "auth-ed25519-config",
+        "namespace": "uav-mvp"
+      },
+      "data": {
+        "auth.json": "{\"role\": \"edge\", \"device_id\": \"jetson-uav-01\", \"cloud_id\": \"uav-cloud-01\", \"credential_version\": \"1\", \"private_key_file\": \"/identity/private.pem\", \"peer_public_key_file\": \"/identity/peer.pem\", \"token_file\": \"/identity/service.token\", \"not_before\": 1790784000, \"not_after\": 1822320000, \"revoked\": false, \"bind\": \"0.0.0.0\", \"port\": 8080}"
+      }
+    },
+    {
+      "apiVersion": "v1",
+      "kind": "Service",
+      "metadata": {
+        "name": "auth-ed25519",
+        "namespace": "uav-mvp"
+      },
+      "spec": {
+        "selector": {
+          "app": "auth-ed25519"
+        },
+        "ports": [
+          {
+            "port": 8080,
+            "targetPort": 8080
+          }
+        ]
+      }
+    },
+    {
+      "apiVersion": "apps/v1",
+      "kind": "Deployment",
+      "metadata": {
+        "name": "auth-ed25519",
+        "namespace": "uav-mvp"
+      },
+      "spec": {
+        "replicas": 0,
+        "selector": {
+          "matchLabels": {
+            "app": "auth-ed25519"
+          }
+        },
+        "template": {
+          "metadata": {
+            "labels": {
+              "app": "auth-ed25519"
+            }
+          },
+          "spec": {
+            "automountServiceAccountToken": false,
+            "securityContext": {
+              "runAsUser": 1000,
+              "runAsGroup": 1000,
+              "fsGroup": 1000,
+              "runAsNonRoot": true
+            },
+            "containers": [
+              {
+                "name": "auth",
+                "image": "47.109.49.98:30881/uav-mvp/crypto-service@sha256:88ee9c82cf30fcb4e2d92958cc859164e3cd90b9c0712cc7fbf27cc2ee5fec63",
+                "imagePullPolicy": "Never",
+                "command": [
+                  "python",
+                  "-m",
+                  "services.auth_service"
+                ],
+                "env": [
+                  {
+                    "name": "UAV_AUTH_CONFIG",
+                    "value": "/config/auth.json"
+                  }
+                ],
+                "ports": [
+                  {
+                    "containerPort": 8080
+                  }
+                ],
+                "securityContext": {
+                  "allowPrivilegeEscalation": false,
+                  "readOnlyRootFilesystem": true,
+                  "capabilities": {
+                    "drop": [
+                      "ALL"
+                    ]
+                  }
+                },
+                "resources": {
+                  "requests": {
+                    "cpu": "50m",
+                    "memory": "64Mi"
+                  },
+                  "limits": {
+                    "cpu": "500m",
+                    "memory": "192Mi"
+                  }
+                },
+                "readinessProbe": {
+                  "exec": {
+                    "command": [
+                      "python",
+                      "-c",
+                      "import json,urllib.request;from pathlib import Path;r=urllib.request.Request('http://127.0.0.1:8080/ready',headers={'Authorization':'Bearer '+Path('/identity/service.token').read_text().strip()});assert json.load(urllib.request.urlopen(r,timeout=2))['ready']"
+                    ]
+                  },
+                  "initialDelaySeconds": 3,
+                  "periodSeconds": 10,
+                  "timeoutSeconds": 5
+                },
+                "livenessProbe": {
+                  "httpGet": {
+                    "path": "/health",
+                    "port": 8080
+                  },
+                  "initialDelaySeconds": 10,
+                  "periodSeconds": 15
+                },
+                "volumeMounts": [
+                  {
+                    "name": "config",
+                    "mountPath": "/config",
+                    "readOnly": true
+                  },
+                  {
+                    "name": "identity",
+                    "mountPath": "/identity",
+                    "readOnly": true
+                  }
+                ]
+              }
+            ],
+            "volumes": [
+              {
+                "name": "config",
+                "configMap": {
+                  "name": "auth-ed25519-config"
+                }
+              },
+              {
+                "name": "identity",
+                "secret": {
+                  "secretName": "uav-auth-ed25519-identity",
+                  "defaultMode": 288
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "apiVersion": "networking.k8s.io/v1",
+      "kind": "NetworkPolicy",
+      "metadata": {
+        "name": "auth-ed25519-ingress",
+        "namespace": "uav-mvp"
+      },
+      "spec": {
+        "podSelector": {
+          "matchLabels": {
+            "app": "auth-ed25519"
+          }
+        },
+        "policyTypes": [
+          "Ingress"
+        ],
+        "ingress": [
+          {
+            "from": [
+              {
+                "podSelector": {
+                  "matchLabels": {
+                    "app": "uav-edge-agent"
+                  }
+                }
+              }
+            ],
+            "ports": [
+              {
+                "protocol": "TCP",
+                "port": 8080
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

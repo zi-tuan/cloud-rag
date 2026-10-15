@@ -1,0 +1,327 @@
+# 渲染输入：使用 python -m deploy.scripts.render_layout，不直接 apply。
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: uav-cloud-control-config
+  namespace: uav
+data:
+  aes.json: |
+    {"suite":"AES-256-GCM","device_id":"jetson-uav-01","key_id":"bootstrap-01","role":"cloud","key_file":"/keys/root.key","token_file":"/keys/service.token","state_path":"/state/messages.db","initialize":false,"initial_epoch":"bootstrap-aes-01","bind":"0.0.0.0","port":18081}
+  sm4.json: |
+    {"suite":"SM4-GCM","device_id":"jetson-uav-01","key_id":"bootstrap-01","role":"cloud","key_file":"/keys/root.key","token_file":"/keys/service.token","state_path":"/state/messages.db","initialize":false,"bind":"0.0.0.0","port":18082}
+  api.json: |
+    {"device_id":"jetson-uav-01","key_id":"bootstrap-01","initial_epoch":"bootstrap-aes-01","initial_suite":"AES-256-GCM","bind":"0.0.0.0","port":38443,"crypto_services":{"AES-256-GCM":"http://uav-cloud-aes.uav.svc.cluster.local:18081","SM4-GCM":"http://uav-cloud-sm4.uav.svc.cluster.local:18082"},"service_token_file":"/keys/service.token","login_verification_url":"http://192.168.2.101:8080/admin/getInfo/","task_state":"/state/tasks.db","switch_state":"/state/switch.db"}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: uav-cloud-aes
+  namespace: uav
+spec:
+  selector:
+    app: uav-cloud-aes
+  ports:
+  - name: http
+    port: 18081
+    targetPort: 18081
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: uav-cloud-aes
+  namespace: uav
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: uav-cloud-aes
+  template:
+    metadata:
+      labels:
+        app: uav-cloud-aes
+    spec:
+      automountServiceAccountToken: false
+      nodeSelector:
+        kubernetes.io/hostname: compute1
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+      - name: crypto
+        image: RENDER_REQUIRED_CRYPTO_AMD64
+        imagePullPolicy: Never
+        command:
+        - python
+        - -m
+        - services.crypto_service
+        env:
+        - name: UAV_CRYPTO_CONFIG
+          value: /config/aes.json
+        ports:
+        - name: http
+          containerPort: 18081
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: '1'
+            memory: 256Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: http
+          periodSeconds: 3
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          periodSeconds: 10
+        volumeMounts:
+        - name: config
+          mountPath: /config
+          readOnly: true
+        - name: identity
+          mountPath: /keys
+          readOnly: true
+        - name: aes-state
+          mountPath: /state
+      volumes:
+      - name: config
+        configMap:
+          name: uav-cloud-control-config
+          items:
+          - key: aes.json
+            path: aes.json
+      - name: identity
+        secret:
+          secretName: uav-cloud-identity
+          defaultMode: 288
+          items:
+          - key: root.key
+            path: root.key
+          - key: service.token
+            path: service.token
+      - name: aes-state
+        hostPath:
+          path: /home/ubuntu/uav-cloud-control/state/aes
+          type: Directory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: uav-cloud-sm4
+  namespace: uav
+spec:
+  selector:
+    app: uav-cloud-sm4
+  ports:
+  - name: http
+    port: 18082
+    targetPort: 18082
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: uav-cloud-sm4
+  namespace: uav
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: uav-cloud-sm4
+  template:
+    metadata:
+      labels:
+        app: uav-cloud-sm4
+    spec:
+      automountServiceAccountToken: false
+      nodeSelector:
+        kubernetes.io/hostname: compute1
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+      - name: crypto
+        image: RENDER_REQUIRED_CRYPTO_AMD64
+        imagePullPolicy: Never
+        command:
+        - python
+        - -m
+        - services.crypto_service
+        env:
+        - name: UAV_CRYPTO_CONFIG
+          value: /config/sm4.json
+        ports:
+        - name: http
+          containerPort: 18082
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: '1'
+            memory: 256Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: http
+          periodSeconds: 3
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          periodSeconds: 10
+        volumeMounts:
+        - name: config
+          mountPath: /config
+          readOnly: true
+        - name: identity
+          mountPath: /keys
+          readOnly: true
+        - name: sm4-state
+          mountPath: /state
+      volumes:
+      - name: config
+        configMap:
+          name: uav-cloud-control-config
+          items:
+          - key: sm4.json
+            path: sm4.json
+      - name: identity
+        secret:
+          secretName: uav-cloud-identity
+          defaultMode: 288
+          items:
+          - key: root.key
+            path: root.key
+          - key: service.token
+            path: service.token
+      - name: sm4-state
+        hostPath:
+          path: /home/ubuntu/uav-cloud-control/state/sm4
+          type: Directory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: uav-cloud-api
+  namespace: uav
+spec:
+  type: NodePort
+  externalTrafficPolicy: Local
+  selector:
+    app: uav-cloud-api
+  ports:
+  - name: http
+    port: 38443
+    targetPort: 38443
+    nodePort: 32443
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: uav-cloud-api
+  namespace: uav
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: uav-cloud-api
+  template:
+    metadata:
+      labels:
+        app: uav-cloud-api
+    spec:
+      automountServiceAccountToken: false
+      nodeSelector:
+        kubernetes.io/hostname: compute1
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+      - name: api
+        image: RENDER_REQUIRED_CLOUD_API
+        imagePullPolicy: Never
+        command:
+        - python
+        - -m
+        - cloud.cloud_api.api
+        env:
+        - name: UAV_CLOUD_CONFIG
+          value: /config/api.json
+        ports:
+        - name: http
+          containerPort: 38443
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: '1'
+            memory: 256Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        readinessProbe:
+          tcpSocket:
+            port: http
+          periodSeconds: 5
+        livenessProbe:
+          tcpSocket:
+            port: http
+          periodSeconds: 10
+        volumeMounts:
+        - name: config
+          mountPath: /config
+          readOnly: true
+        - name: identity
+          mountPath: /keys
+          readOnly: true
+        - name: api-state
+          mountPath: /state
+      volumes:
+      - name: config
+        configMap:
+          name: uav-cloud-control-config
+          items:
+          - key: api.json
+            path: api.json
+      - name: identity
+        secret:
+          secretName: uav-cloud-identity
+          defaultMode: 288
+          items:
+          - key: service.token
+            path: service.token
+      - name: api-state
+        hostPath:
+          path: /home/ubuntu/uav-cloud-control/state/api
+          type: Directory

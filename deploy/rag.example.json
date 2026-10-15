@@ -1,0 +1,147 @@
+{
+  "apiVersion": "v1",
+  "kind": "List",
+  "items": [
+    {
+      "apiVersion": "apps/v1",
+      "kind": "Deployment",
+      "metadata": {
+        "name": "uav-rag",
+        "namespace": "namespace-replace"
+      },
+      "spec": {
+        "replicas": 1,
+        "revisionHistoryLimit": 3,
+        "strategy": {
+          "type": "Recreate"
+        },
+        "selector": {
+          "matchLabels": {
+            "app": "uav-rag"
+          }
+        },
+        "template": {
+          "metadata": {
+            "labels": {
+              "app": "uav-rag"
+            },
+            "annotations": {
+              "uav/knowledge-release": "RELEASE_ID_REPLACE"
+            }
+          },
+          "spec": {
+            "automountServiceAccountToken": false,
+            "nodeSelector": {
+              "kubernetes.io/arch": "amd64"
+            },
+            "securityContext": {
+              "runAsUser": 1000,
+              "runAsGroup": 1000,
+              "fsGroup": 1000
+            },
+            "containers": [
+              {
+                "name": "rag",
+                "image": "REGISTRY_REPLACE/uav-rag@sha256:DIGEST_REPLACE",
+                "imagePullPolicy": "IfNotPresent",
+                "ports": [
+                  {
+                    "containerPort": 8787
+                  }
+                ],
+                "env": [
+                  {
+                    "name": "UAV_RAG_TOKEN_FILE",
+                    "value": "/rag-secret/service.token"
+                  }
+                ],
+                "securityContext": {
+                  "allowPrivilegeEscalation": false,
+                  "readOnlyRootFilesystem": true,
+                  "capabilities": {
+                    "drop": [
+                      "ALL"
+                    ]
+                  }
+                },
+                "resources": {
+                  "requests": {
+                    "cpu": "100m",
+                    "memory": "256Mi"
+                  },
+                  "limits": {
+                    "cpu": "1",
+                    "memory": "1Gi"
+                  }
+                },
+                "readinessProbe": {
+                  "httpGet": {
+                    "path": "/health",
+                    "port": 8787
+                  },
+                  "periodSeconds": 10
+                },
+                "livenessProbe": {
+                  "httpGet": {
+                    "path": "/health",
+                    "port": 8787
+                  },
+                  "periodSeconds": 10,
+                  "initialDelaySeconds": 30
+                },
+                "volumeMounts": [
+                  {
+                    "name": "knowledge",
+                    "mountPath": "/data",
+                    "subPath": "RELEASE_ID_REPLACE",
+                    "readOnly": true
+                  },
+                  {
+                    "name": "token",
+                    "mountPath": "/rag-secret",
+                    "readOnly": true
+                  }
+                ]
+              }
+            ],
+            "volumes": [
+              {
+                "name": "knowledge",
+                "persistentVolumeClaim": {
+                  "claimName": "pvc-replace"
+                }
+              },
+              {
+                "name": "token",
+                "secret": {
+                  "secretName": "uav-rag-token",
+                  "defaultMode": 288
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "apiVersion": "v1",
+      "kind": "Service",
+      "metadata": {
+        "name": "uav-rag",
+        "namespace": "namespace-replace"
+      },
+      "spec": {
+        "type": "ClusterIP",
+        "selector": {
+          "app": "uav-rag"
+        },
+        "ports": [
+          {
+            "port": 8787,
+            "targetPort": 8787
+          }
+        ]
+      }
+    }
+  ]
+}

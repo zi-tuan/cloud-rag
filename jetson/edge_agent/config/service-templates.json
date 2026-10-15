@@ -1,0 +1,324 @@
+{
+  "aes-gcm-v1": [
+    {
+      "apiVersion": "v1",
+      "kind": "ConfigMap",
+      "metadata": {
+        "name": "aes-crypto-config",
+        "namespace": "uav-mvp"
+      },
+      "data": {
+        "crypto.json": "{\"suite\": \"AES-256-GCM\", \"device_id\": \"jetson-uav-01\", \"key_id\": \"bootstrap-01\", \"role\": \"edge\", \"key_file\": \"/keys/root.key\", \"token_file\": \"/keys/service.token\", \"state_path\": \"/state/messages.db\", \"initialize\": false, \"initial_epoch\": \"bootstrap-aes-01\"}"
+      }
+    },
+    {
+      "apiVersion": "v1",
+      "kind": "Service",
+      "metadata": {
+        "name": "aes-service",
+        "namespace": "uav-mvp"
+      },
+      "spec": {
+        "selector": {
+          "app": "aes-service"
+        },
+        "ports": [
+          {
+            "port": 8080,
+            "targetPort": 8080
+          }
+        ]
+      }
+    },
+    {
+      "apiVersion": "apps/v1",
+      "kind": "Deployment",
+      "metadata": {
+        "name": "aes-service",
+        "namespace": "uav-mvp"
+      },
+      "spec": {
+        "replicas": 1,
+        "revisionHistoryLimit": 5,
+        "progressDeadlineSeconds": 90,
+        "strategy": {
+          "type": "RollingUpdate",
+          "rollingUpdate": {
+            "maxSurge": 1,
+            "maxUnavailable": 0
+          }
+        },
+        "selector": {
+          "matchLabels": {
+            "app": "aes-service"
+          }
+        },
+        "template": {
+          "metadata": {
+            "labels": {
+              "app": "aes-service"
+            }
+          },
+          "spec": {
+            "automountServiceAccountToken": false,
+            "securityContext": {
+              "runAsUser": 1000,
+              "runAsGroup": 1000,
+              "fsGroup": 1000
+            },
+            "containers": [
+              {
+                "name": "crypto",
+                "image": "47.109.49.98:30881/uav-mvp/crypto-service@sha256:e3415bcc66c14512ccdc404a7a15a015b872314ebb6c9b0ee2b30256fbf098f7",
+                "imagePullPolicy": "IfNotPresent",
+                "ports": [
+                  {
+                    "containerPort": 8080
+                  }
+                ],
+                "env": [
+                  {
+                    "name": "SERVICE_VERSION",
+                    "value": "v1"
+                  }
+                ],
+                "resources": {
+                  "requests": {
+                    "cpu": "50m",
+                    "memory": "64Mi"
+                  },
+                  "limits": {
+                    "cpu": "1",
+                    "memory": "256Mi"
+                  }
+                },
+                "securityContext": {
+                  "allowPrivilegeEscalation": false,
+                  "readOnlyRootFilesystem": true,
+                  "capabilities": {
+                    "drop": [
+                      "ALL"
+                    ]
+                  }
+                },
+                "readinessProbe": {
+                  "httpGet": {
+                    "path": "/ready",
+                    "port": 8080
+                  },
+                  "periodSeconds": 3
+                },
+                "livenessProbe": {
+                  "httpGet": {
+                    "path": "/health",
+                    "port": 8080
+                  },
+                  "periodSeconds": 10
+                },
+                "volumeMounts": [
+                  {
+                    "name": "config",
+                    "mountPath": "/config",
+                    "readOnly": true
+                  },
+                  {
+                    "name": "keys",
+                    "mountPath": "/keys",
+                    "readOnly": true
+                  },
+                  {
+                    "name": "state",
+                    "mountPath": "/state"
+                  }
+                ]
+              }
+            ],
+            "volumes": [
+              {
+                "name": "config",
+                "configMap": {
+                  "name": "aes-crypto-config"
+                }
+              },
+              {
+                "name": "keys",
+                "secret": {
+                  "secretName": "crypto-identity",
+                  "defaultMode": 288
+                }
+              },
+              {
+                "name": "state",
+                "hostPath": {
+                  "path": "/var/lib/uav-mvp/crypto/aes",
+                  "type": "Directory"
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "sm4-gcm-v1": [
+    {
+      "apiVersion": "v1",
+      "kind": "ConfigMap",
+      "metadata": {
+        "name": "sm4-crypto-config",
+        "namespace": "uav-mvp"
+      },
+      "data": {
+        "crypto.json": "{\"suite\": \"SM4-GCM\", \"device_id\": \"jetson-uav-01\", \"key_id\": \"bootstrap-01\", \"role\": \"edge\", \"key_file\": \"/keys/root.key\", \"token_file\": \"/keys/service.token\", \"state_path\": \"/state/messages.db\", \"initialize\": false}"
+      }
+    },
+    {
+      "apiVersion": "v1",
+      "kind": "Service",
+      "metadata": {
+        "name": "sm4-service",
+        "namespace": "uav-mvp"
+      },
+      "spec": {
+        "selector": {
+          "app": "sm4-service"
+        },
+        "ports": [
+          {
+            "port": 8080,
+            "targetPort": 8080
+          }
+        ]
+      }
+    },
+    {
+      "apiVersion": "apps/v1",
+      "kind": "Deployment",
+      "metadata": {
+        "name": "sm4-service",
+        "namespace": "uav-mvp"
+      },
+      "spec": {
+        "replicas": 1,
+        "revisionHistoryLimit": 5,
+        "progressDeadlineSeconds": 90,
+        "strategy": {
+          "type": "RollingUpdate",
+          "rollingUpdate": {
+            "maxSurge": 1,
+            "maxUnavailable": 0
+          }
+        },
+        "selector": {
+          "matchLabels": {
+            "app": "sm4-service"
+          }
+        },
+        "template": {
+          "metadata": {
+            "labels": {
+              "app": "sm4-service"
+            }
+          },
+          "spec": {
+            "automountServiceAccountToken": false,
+            "securityContext": {
+              "runAsUser": 1000,
+              "runAsGroup": 1000,
+              "fsGroup": 1000
+            },
+            "containers": [
+              {
+                "name": "crypto",
+                "image": "47.109.49.98:30881/uav-mvp/crypto-service@sha256:e3415bcc66c14512ccdc404a7a15a015b872314ebb6c9b0ee2b30256fbf098f7",
+                "imagePullPolicy": "IfNotPresent",
+                "ports": [
+                  {
+                    "containerPort": 8080
+                  }
+                ],
+                "env": [
+                  {
+                    "name": "SERVICE_VERSION",
+                    "value": "v1"
+                  }
+                ],
+                "resources": {
+                  "requests": {
+                    "cpu": "50m",
+                    "memory": "64Mi"
+                  },
+                  "limits": {
+                    "cpu": "1",
+                    "memory": "256Mi"
+                  }
+                },
+                "securityContext": {
+                  "allowPrivilegeEscalation": false,
+                  "readOnlyRootFilesystem": true,
+                  "capabilities": {
+                    "drop": [
+                      "ALL"
+                    ]
+                  }
+                },
+                "readinessProbe": {
+                  "httpGet": {
+                    "path": "/ready",
+                    "port": 8080
+                  },
+                  "periodSeconds": 3
+                },
+                "livenessProbe": {
+                  "httpGet": {
+                    "path": "/health",
+                    "port": 8080
+                  },
+                  "periodSeconds": 10
+                },
+                "volumeMounts": [
+                  {
+                    "name": "config",
+                    "mountPath": "/config",
+                    "readOnly": true
+                  },
+                  {
+                    "name": "keys",
+                    "mountPath": "/keys",
+                    "readOnly": true
+                  },
+                  {
+                    "name": "state",
+                    "mountPath": "/state"
+                  }
+                ]
+              }
+            ],
+            "volumes": [
+              {
+                "name": "config",
+                "configMap": {
+                  "name": "sm4-crypto-config"
+                }
+              },
+              {
+                "name": "keys",
+                "secret": {
+                  "secretName": "crypto-identity",
+                  "defaultMode": 288
+                }
+              },
+              {
+                "name": "state",
+                "hostPath": {
+                  "path": "/var/lib/uav-mvp/crypto/sm4",
+                  "type": "Directory"
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

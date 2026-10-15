@@ -1,0 +1,23 @@
+{
+  "device_id": "jetson-uav-01",
+  "key_id": "bootstrap-01",
+  "initial_epoch": "bootstrap-aes-01",
+  "initial_suite": "AES-256-GCM",
+  "bind": "0.0.0.0",
+  "port": 38443,
+  "crypto_services": {
+    "AES-256-GCM": "http://127.0.0.1:18081",
+    "SM4-GCM": "http://127.0.0.1:18082"
+  },
+  "service_token_file": "/etc/uav-mvp/control/service.token",
+  "identity_auth": {
+    "service_url": "http://127.0.0.1:18083",
+    "token_file": "/etc/uav-mvp/auth/service.token",
+    "cloud_id": "uav-cloud-01",
+    "credential_version": "1",
+    "state_path": "/var/lib/uav-mvp/control/auth.db"
+  },
+  "login_verification_url": "http://127.0.0.1:8080/admin/getInfo/",
+  "task_state": "/var/lib/uav-mvp/control/tasks.db",
+  "switch_state": "/var/lib/uav-mvp/control/switch.db"
+}

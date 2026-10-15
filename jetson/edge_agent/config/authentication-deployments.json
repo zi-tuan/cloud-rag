@@ -1,0 +1,414 @@
+{
+  "Ed25519": {
+    "deployment": "auth-ed25519",
+    "namespace": "uav-mvp",
+    "container_name": "auth",
+    "image": "47.109.49.98:30881/uav-mvp/crypto-service@sha256:88ee9c82cf30fcb4e2d92958cc859164e3cd90b9c0712cc7fbf27cc2ee5fec63",
+    "resources": {
+      "limits": {
+        "cpu": "500m",
+        "memory": "192Mi"
+      },
+      "requests": {
+        "cpu": "50m",
+        "memory": "64Mi"
+      }
+    },
+    "health_path": null,
+    "registry_verified": true,
+    "pod_spec": {
+      "automountServiceAccountToken": false,
+      "containers": [
+        {
+          "command": [
+            "python",
+            "-m",
+            "services.auth_service"
+          ],
+          "env": [
+            {
+              "name": "UAV_AUTH_CONFIG",
+              "value": "/config/auth.json"
+            }
+          ],
+          "image": "47.109.49.98:30881/uav-mvp/crypto-service@sha256:88ee9c82cf30fcb4e2d92958cc859164e3cd90b9c0712cc7fbf27cc2ee5fec63",
+          "imagePullPolicy": "Never",
+          "livenessProbe": {
+            "failureThreshold": 3,
+            "httpGet": {
+              "path": "/health",
+              "port": 8080,
+              "scheme": "HTTP"
+            },
+            "initialDelaySeconds": 10,
+            "periodSeconds": 15,
+            "successThreshold": 1,
+            "timeoutSeconds": 1
+          },
+          "name": "auth",
+          "ports": [
+            {
+              "containerPort": 8080,
+              "protocol": "TCP"
+            }
+          ],
+          "readinessProbe": {
+            "exec": {
+              "command": [
+                "python",
+                "-c",
+                "import json,urllib.request;from pathlib import Path;r=urllib.request.Request('http://127.0.0.1:8080/ready',headers={'Authorization':'Bearer '+Path('/identity/service.token').read_text().strip()});assert json.load(urllib.request.urlopen(r,timeout=2))['ready']"
+              ]
+            },
+            "failureThreshold": 3,
+            "initialDelaySeconds": 3,
+            "periodSeconds": 10,
+            "successThreshold": 1,
+            "timeoutSeconds": 5
+          },
+          "resources": {
+            "limits": {
+              "cpu": "500m",
+              "memory": "192Mi"
+            },
+            "requests": {
+              "cpu": "50m",
+              "memory": "64Mi"
+            }
+          },
+          "securityContext": {
+            "allowPrivilegeEscalation": false,
+            "capabilities": {
+              "drop": [
+                "ALL"
+              ]
+            },
+            "readOnlyRootFilesystem": true
+          },
+          "terminationMessagePath": "/dev/termination-log",
+          "terminationMessagePolicy": "File",
+          "volumeMounts": [
+            {
+              "mountPath": "/config",
+              "name": "config",
+              "readOnly": true
+            },
+            {
+              "mountPath": "/identity",
+              "name": "identity",
+              "readOnly": true
+            }
+          ]
+        }
+      ],
+      "dnsPolicy": "ClusterFirst",
+      "restartPolicy": "Always",
+      "schedulerName": "default-scheduler",
+      "securityContext": {
+        "fsGroup": 1000,
+        "runAsGroup": 1000,
+        "runAsNonRoot": true,
+        "runAsUser": 1000
+      },
+      "terminationGracePeriodSeconds": 30,
+      "volumes": [
+        {
+          "configMap": {
+            "defaultMode": 420,
+            "name": "auth-ed25519-config"
+          },
+          "name": "config"
+        },
+        {
+          "name": "identity",
+          "secret": {
+            "defaultMode": 288,
+            "secretName": "uav-auth-ed25519-identity"
+          }
+        }
+      ]
+    }
+  },
+  "RSA": {
+    "deployment": "auth-rsa",
+    "namespace": "uav-mvp",
+    "container_name": "auth",
+    "image": "47.109.49.98:30881/uav-mvp/crypto-service@sha256:68aa765c8ffaa8e915262e4ea0fd70075c809337068ee03a62eb85796f411667",
+    "resources": {
+      "limits": {
+        "cpu": "500m",
+        "memory": "192Mi"
+      },
+      "requests": {
+        "cpu": "50m",
+        "memory": "64Mi"
+      }
+    },
+    "health_path": null,
+    "registry_verified": true,
+    "pod_spec": {
+      "automountServiceAccountToken": false,
+      "containers": [
+        {
+          "command": [
+            "python",
+            "-m",
+            "services.auth_service"
+          ],
+          "env": [
+            {
+              "name": "UAV_AUTH_CONFIG",
+              "value": "/config/auth.json"
+            }
+          ],
+          "image": "47.109.49.98:30881/uav-mvp/crypto-service@sha256:68aa765c8ffaa8e915262e4ea0fd70075c809337068ee03a62eb85796f411667",
+          "imagePullPolicy": "Never",
+          "livenessProbe": {
+            "failureThreshold": 3,
+            "httpGet": {
+              "path": "/health",
+              "port": 8080,
+              "scheme": "HTTP"
+            },
+            "initialDelaySeconds": 10,
+            "periodSeconds": 15,
+            "successThreshold": 1,
+            "timeoutSeconds": 1
+          },
+          "name": "auth",
+          "ports": [
+            {
+              "containerPort": 8080,
+              "protocol": "TCP"
+            }
+          ],
+          "readinessProbe": {
+            "exec": {
+              "command": [
+                "python",
+                "-c",
+                "import json,urllib.request;from pathlib import Path;r=urllib.request.Request('http://127.0.0.1:8080/ready',headers={'Authorization':'Bearer '+Path('/identity/service.token').read_text().strip()});assert json.load(urllib.request.urlopen(r,timeout=2))['ready']"
+              ]
+            },
+            "failureThreshold": 3,
+            "initialDelaySeconds": 3,
+            "periodSeconds": 10,
+            "successThreshold": 1,
+            "timeoutSeconds": 5
+          },
+          "resources": {
+            "limits": {
+              "cpu": "500m",
+              "memory": "192Mi"
+            },
+            "requests": {
+              "cpu": "50m",
+              "memory": "64Mi"
+            }
+          },
+          "securityContext": {
+            "allowPrivilegeEscalation": false,
+            "capabilities": {
+              "drop": [
+                "ALL"
+              ]
+            },
+            "readOnlyRootFilesystem": true
+          },
+          "terminationMessagePath": "/dev/termination-log",
+          "terminationMessagePolicy": "File",
+          "volumeMounts": [
+            {
+              "mountPath": "/config",
+              "name": "config",
+              "readOnly": true
+            },
+            {
+              "mountPath": "/identity",
+              "name": "identity",
+              "readOnly": true
+            },
+            {
+              "mountPath": "/tmp",
+              "name": "scratch"
+            }
+          ]
+        }
+      ],
+      "dnsPolicy": "ClusterFirst",
+      "restartPolicy": "Always",
+      "schedulerName": "default-scheduler",
+      "securityContext": {
+        "fsGroup": 1000,
+        "runAsGroup": 1000,
+        "runAsNonRoot": true,
+        "runAsUser": 1000
+      },
+      "terminationGracePeriodSeconds": 30,
+      "volumes": [
+        {
+          "configMap": {
+            "defaultMode": 420,
+            "name": "auth-rsa-config"
+          },
+          "name": "config"
+        },
+        {
+          "name": "identity",
+          "secret": {
+            "defaultMode": 288,
+            "secretName": "uav-auth-rsa-identity"
+          }
+        },
+        {
+          "emptyDir": {
+            "medium": "Memory",
+            "sizeLimit": "16Mi"
+          },
+          "name": "scratch"
+        }
+      ]
+    }
+  },
+  "SM2": {
+    "deployment": "auth-sm2",
+    "namespace": "uav-mvp",
+    "container_name": "auth",
+    "image": "47.109.49.98:30881/uav-mvp/crypto-service@sha256:68aa765c8ffaa8e915262e4ea0fd70075c809337068ee03a62eb85796f411667",
+    "resources": {
+      "limits": {
+        "cpu": "500m",
+        "memory": "192Mi"
+      },
+      "requests": {
+        "cpu": "50m",
+        "memory": "64Mi"
+      }
+    },
+    "health_path": null,
+    "registry_verified": true,
+    "pod_spec": {
+      "automountServiceAccountToken": false,
+      "containers": [
+        {
+          "command": [
+            "python",
+            "-m",
+            "services.auth_service"
+          ],
+          "env": [
+            {
+              "name": "UAV_AUTH_CONFIG",
+              "value": "/config/auth.json"
+            }
+          ],
+          "image": "47.109.49.98:30881/uav-mvp/crypto-service@sha256:68aa765c8ffaa8e915262e4ea0fd70075c809337068ee03a62eb85796f411667",
+          "imagePullPolicy": "Never",
+          "livenessProbe": {
+            "failureThreshold": 3,
+            "httpGet": {
+              "path": "/health",
+              "port": 8080,
+              "scheme": "HTTP"
+            },
+            "initialDelaySeconds": 10,
+            "periodSeconds": 15,
+            "successThreshold": 1,
+            "timeoutSeconds": 1
+          },
+          "name": "auth",
+          "ports": [
+            {
+              "containerPort": 8080,
+              "protocol": "TCP"
+            }
+          ],
+          "readinessProbe": {
+            "exec": {
+              "command": [
+                "python",
+                "-c",
+                "import json,urllib.request;from pathlib import Path;r=urllib.request.Request('http://127.0.0.1:8080/ready',headers={'Authorization':'Bearer '+Path('/identity/service.token').read_text().strip()});assert json.load(urllib.request.urlopen(r,timeout=2))['ready']"
+              ]
+            },
+            "failureThreshold": 3,
+            "initialDelaySeconds": 3,
+            "periodSeconds": 10,
+            "successThreshold": 1,
+            "timeoutSeconds": 5
+          },
+          "resources": {
+            "limits": {
+              "cpu": "500m",
+              "memory": "192Mi"
+            },
+            "requests": {
+              "cpu": "50m",
+              "memory": "64Mi"
+            }
+          },
+          "securityContext": {
+            "allowPrivilegeEscalation": false,
+            "capabilities": {
+              "drop": [
+                "ALL"
+              ]
+            },
+            "readOnlyRootFilesystem": true
+          },
+          "terminationMessagePath": "/dev/termination-log",
+          "terminationMessagePolicy": "File",
+          "volumeMounts": [
+            {
+              "mountPath": "/config",
+              "name": "config",
+              "readOnly": true
+            },
+            {
+              "mountPath": "/identity",
+              "name": "identity",
+              "readOnly": true
+            },
+            {
+              "mountPath": "/tmp",
+              "name": "scratch"
+            }
+          ]
+        }
+      ],
+      "dnsPolicy": "ClusterFirst",
+      "restartPolicy": "Always",
+      "schedulerName": "default-scheduler",
+      "securityContext": {
+        "fsGroup": 1000,
+        "runAsGroup": 1000,
+        "runAsNonRoot": true,
+        "runAsUser": 1000
+      },
+      "terminationGracePeriodSeconds": 30,
+      "volumes": [
+        {
+          "configMap": {
+            "defaultMode": 420,
+            "name": "auth-sm2-config"
+          },
+          "name": "config"
+        },
+        {
+          "name": "identity",
+          "secret": {
+            "defaultMode": 288,
+            "secretName": "uav-auth-sm2-identity"
+          }
+        },
+        {
+          "emptyDir": {
+            "medium": "Memory",
+            "sizeLimit": "16Mi"
+          },
+          "name": "scratch"
+        }
+      ]
+    }
+  }
+}

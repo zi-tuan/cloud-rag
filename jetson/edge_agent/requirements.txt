@@ -1,0 +1,3 @@
+-r ../../shared/requirements.txt
+pymavlink==2.4.42
+PyYAML==6.0.3

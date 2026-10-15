@@ -1,0 +1,31 @@
+# Explicit placeholders: review and replace before applying. No credentials.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: rag-upload
+  namespace: NAMESPACE_REPLACE
+spec:
+  restartPolicy: Never
+  automountServiceAccountToken: false
+  nodeSelector:
+    kubernetes.io/arch: amd64
+  securityContext:
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+  containers:
+    - name: upload
+      image: REGISTRY_REPLACE/uav-rag@sha256:DIGEST_REPLACE
+      command: [python, -c, "import time; time.sleep(3600)"]
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop: [ALL]
+      volumeMounts:
+        - name: knowledge
+          mountPath: /upload
+  volumes:
+    - name: knowledge
+      persistentVolumeClaim:
+        claimName: PVC_REPLACE

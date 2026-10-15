@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "uav-services": {
+      "command": "/usr/local/bin/python",
+      "args": [
+        "-m",
+        "uav_rag.mcp_guard"
+      ],
+      "env": {
+        "PYTHONPATH": "/opt/uav/vendor:/opt/uav/app",
+        "UAV_MCP_GUARD_CONFIG": "/opt/uav/config/mcp-guard.json"
+      },
+      "lifecycle": "eager"
+    }
+  }
+}
