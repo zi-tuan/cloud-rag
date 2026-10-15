@@ -11,9 +11,9 @@ from uav_rag.workflow import run_workflow
 
 def main():
     root = Path(__file__).resolve().parent
-    db = root/'data/gmssl.sqlite3'
+    db = root/'data/openssl.sqlite3'
     if not db.exists():
-        source = root/'sources/GmSSL' if (root/'sources/GmSSL').exists() else root.parent/'GmSSL'
+        source = root/'sources/openssl' if (root/'sources/openssl').exists() else root.parent/'openssl'
         build(source,db)
     server = make_server(KnowledgeBase(db),port=0)
     worker = threading.Thread(target=server.serve_forever,daemon=True)
@@ -37,8 +37,8 @@ def main():
             reason='演示替身按需调用云端查询工具；不代表真实模型判断。', citation_ids=citations)
     try:
         result = run_workflow(task,agent,RagClient(f'http://127.0.0.1:{server.server_port}'))
-        result['test_scope'] = '真实 GmSSL 索引和 HTTP；Agent 为确定性替身；没有启动服务或飞控。'
-        report = root/'data/demo-result.json'
+        result['test_scope'] = '真实 OpenSSL 源码索引和 HTTP；Agent 为确定性替身；没有执行密码运算或启动无人机服务。'
+        report = root/'data/openssl-demo-result.json'
         report.write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf-8')
         print(json.dumps(dict(state=result['state'],selected=result['decision']['selected_services'],
             pages=len(result['retrieval']['pages']),report=str(report),test_scope=result['test_scope']),ensure_ascii=False,indent=2))

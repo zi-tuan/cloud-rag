@@ -1,32 +1,33 @@
-"""Adapter IDs from the UAV registry; descriptions are not deployment authority."""
+"""OpenSSL source evidence; stable UAV IDs are not deployment authority."""
+from .legacy_catalog import ALIASES, service_id
+
+
+def entry(label, terms, paths, binding):
+    return dict(label=label, terms=terms, paths=paths, binding=binding,
+                evidence='available', note='OpenSSL 源码及官方接口文档证据；未证明目标运行环境已启用算法或无人机服务已部署。')
+
+
 SERVICES = {
-    'sm4-gcm-v1': dict(label='SM4-GCM 通信加密', terms='sm4 gcm encrypt decrypt',
-        paths=['include/gmssl/sm4.h', 'src/sm4_gcm.c', 'tools/sm4_gcm.c', 'tests/sm4_gcmtest.c'],
-        binding={'suite': 'SM4-GCM'}, evidence='available'),
-    'aes-gcm-v1': dict(label='AES-256-GCM 通信加密', terms='aes gcm encrypt decrypt',
-        paths=['include/gmssl/aes.h', 'src/aes.c', 'tests/aestest.c'],
-        binding={'suite': 'AES-256-GCM'}, evidence='available'),
-    'auth-sm2': dict(label='SM2 身份签名与验签', terms='sm2 sign verify',
-        paths=['include/gmssl/sm2.h', 'src/sm2_sign.c', 'tools/sm2sign.c', 'tools/sm2verify.c'],
-        binding={'auth_policy': 'SM2'}, evidence='available'),
-    'auth-rsa': dict(label='RSA 身份认证', terms='rsa pss sign verify',
-        paths=['include/gmssl/rsa.h', 'src/rsa.c'], binding={'auth_policy': 'RSA'},
-        evidence='insufficient', note='本地 RSA 文件主要是公钥打印；不能据此证明 RSA-PSS 服务实现。'),
-    'auth-ed25519': dict(label='Ed25519 身份认证', terms='ed25519', paths=[],
-        binding={'auth_policy': 'Ed25519'}, evidence='not_found',
-        note='当前 GmSSL 资料没有 Ed25519 实现证据；需补充无人机认证服务文档。'),
-    'gmssl-sm3': dict(label='SM3 摘要与 HMAC', terms='sm3 hmac digest',
-        paths=['include/gmssl/sm3.h', 'src/sm3_hmac.c', 'tools/sm3.c'], binding={}, evidence='available'),
-    'gmssl-hkdf': dict(label='HKDF 密钥派生', terms='hkdf extract expand',
-        paths=['include/gmssl/hkdf.h', 'src/hkdf.c'], binding={}, evidence='available'),
-    'gmssl-x509': dict(label='X.509 证书和 CRL 校验', terms='x509 certificate crl verify',
-        paths=['include/gmssl/x509.h', 'src/x509_vrf.c', 'tools/certverify.c'], binding={}, evidence='available'),
+    'sm4-gcm-v1': entry('SM4-GCM 通信加密', 'sm4 gcm encrypt decrypt',
+        ['doc/man7/EVP_CIPHER-SM4.pod', 'providers/implementations/ciphers/cipher_sm4_gcm.c'],
+        {'suite': 'SM4-GCM'}),
+    'aes-gcm-v1': entry('AES-256-GCM 通信加密', 'aes gcm encrypt decrypt',
+        ['doc/man7/EVP_CIPHER-AES.pod', 'providers/implementations/ciphers/cipher_aes_gcm.c'],
+        {'suite': 'AES-256-GCM'}),
+    'auth-sm2': entry('SM2 身份签名与验签', 'sm2 sign verify',
+        ['doc/man7/EVP_SIGNATURE-SM2.pod', 'doc/man7/EVP_PKEY-SM2.pod',
+         'providers/implementations/signature/sm2_sig.c'], {'auth_policy': 'SM2'}),
+    'auth-rsa': entry('RSA-PSS 身份认证', 'rsa pss sign verify',
+        ['doc/man7/EVP_SIGNATURE-RSA.pod', 'providers/implementations/signature/rsa_sig.c'],
+        {'auth_policy': 'RSA'}),
+    'auth-ed25519': entry('Ed25519 身份认证', 'ed25519 sign verify',
+        ['doc/man7/EVP_SIGNATURE-ED25519.pod', 'providers/implementations/signature/eddsa_sig.c'],
+        {'auth_policy': 'Ed25519'}),
+    # Historical public IDs remain stable; the corpus identifies the library.
+    'gmssl-sm3': entry('SM3 摘要与 HMAC', 'sm3 hmac digest',
+        ['doc/man7/EVP_MD-SM3.pod', 'doc/man7/EVP_MAC-HMAC.pod', 'crypto/sm3/sm3.c'], {}),
+    'gmssl-hkdf': entry('HKDF 密钥派生', 'hkdf extract expand',
+        ['doc/man7/EVP_KDF-HKDF.pod', 'providers/implementations/kdfs/hkdf.c'], {}),
+    'gmssl-x509': entry('X.509 证书和 CRL 校验', 'x509 certificate crl verify',
+        ['doc/man7/x509.pod', 'crypto/x509/x509_vfy.c'], {}),
 }
-
-ALIASES = {'SM4-GCM': 'sm4-gcm-v1', 'AES-256-GCM': 'aes-gcm-v1',
-           'SM2': 'auth-sm2', 'RSA': 'auth-rsa', 'Ed25519': 'auth-ed25519',
-           'SM3': 'gmssl-sm3', 'HKDF': 'gmssl-hkdf', 'X509': 'gmssl-x509'}
-
-
-def service_id(value):
-    return ALIASES.get(value, value)

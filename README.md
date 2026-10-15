@@ -1,5 +1,7 @@
 # 无人机服务 RAG：本地实现与云端交付
 
+当前知识来源已迁移为提供的 **OpenSSL 4.2.0-dev 源码**。迁移范围是 SQLite 的源码资料和算法说明；本模块没有 GmSSL 字段加解密调用。参见 [迁移与回滚说明](docs/OPENSSL-MIGRATION.md)、[独立算法文档](docs/OPENSSL-ALGORITHMS.md) 和 [本次测试报告](docs/OPENSSL-VALIDATION.md)。旧日期报告仍记录 GmSSL 部署，不能作为新版本验收依据。
+
 本模块为现有 UAV 项目增加云端服务知识库。无人机 Agent 通过只读工具按需检索云端数据库，获取有长度预算的知识分页；原任务不追加数据库内容。旧批量补充接口保留作人工查询兼容。最终判断交给无人机 Agent，启动与切换继续使用原项目的 MCP Guard、TaskExecutor 和 SwitchCoordinator。
 
 Python 3.11+，仅依赖标准库及 SQLite FTS5。当前是 **BM25 检索增强实现**，未使用 embedding 模型或向量数据库；中文通过双字分词和受控术语扩展匹配 C 接口。生成步骤由现有无人机 Agent 承担，检索服务本身不编造服务说明、不调用外部模型。若以后引入向量检索，应保留现有引用和服务 ID 约束，并先建立检索评测集。
@@ -10,7 +12,7 @@ Python 3.11+，仅依赖标准库及 SQLite FTS5。当前是 **BM25 检索增强
 
 ```powershell
 cd E:\claudeCode\project\Intra-group-project\cloud-rag
-python -X utf8 -m uav_rag index --source ..\GmSSL --db data\gmssl.sqlite3
+python -X utf8 -m uav_rag index --source ..\openssl --db data\openssl.sqlite3
 python -X utf8 -m uav_rag serve
 ```
 
@@ -21,15 +23,15 @@ cd E:\claudeCode\project\Intra-group-project\cloud-rag
 python -X utf8 -m uav_rag query "无人机需要国密身份签名和 GCM 通信加密" --services SM2 SM4-GCM RSA Ed25519
 ```
 
-服务默认只监听 `127.0.0.1:8787`。默认数据库已从本机 GmSSL 建好，为 401 个文件、3986 个片段。`index` 完成后原子替换数据库；运行中的服务应重启后再查询新索引，避免把旧版本元数据与新文件混用。它不会修改 GmSSL 源码。
+服务默认只监听 `127.0.0.1:8787`，默认新库为 `data/openssl.sqlite3`。`index` 只创建新数据库，目标已存在会拒绝；更新时使用新文件名，再切换配置并重启服务，避免旧元数据与新连接混用。它不会修改 OpenSSL 源码或原 `data/gmssl.sqlite3`。
 
-完整本地演示：`python -X utf8 demo.py`。该演示使用真实索引和 HTTP，Agent 是明确标注的确定性替身。完整证据保存于 `data/demo-result.json`。真实模型运行不属于此演示的验证范围。
+完整本地演示：`python -X utf8 demo.py`。该演示使用真实 OpenSSL 索引和 HTTP，Agent 为确定性替身。完整证据保存于 `data/openssl-demo-result.json`。真实模型与密码运算不属于此演示的验证范围。
 
 ## 数据与检索契约
 
 SQLite 的 `chunks` 表保存原文、相对路径、起止行号、文件 SHA-256、片段 ID 和检索文本；`search` 是 FTS5 索引；`metadata` 保存语料版本、文件数量和片段数量。语料版本由全部文件路径与内容哈希确定。每片最多 60 行，相邻片段重叠 12 行。
 
-索引涵盖 Markdown、头文件、C 源码、CMake 和许可证，跳过隐藏目录、构建目录、超大文件和生成的大型查表文件。全文检索可查询所有入库文件；候选服务补充 API 进一步限定到映射的实现、声明、工具或测试文件，防止借用无关算法的资料。
+索引涵盖 OpenSSL 主项目选定目录的 Markdown、POD、头文件、C 源码、`.in` 模板和许可证，排除第三方子模块、隐藏目录、构建目录、超大文件和大型查表文件。全文检索可查询所有入库文件；候选服务 API 限定到登记的 EVP 文档及实现路径，防止借用无关算法的资料。
 
 `POST /v1/services/enrich`：
 
@@ -51,15 +53,15 @@ SQLite 的 `chunks` 表保存原文、相对路径、起止行号、文件 SHA-2
 - `description`：算法的一般用途 `purpose`、优点与选择条件 `advantages`、缺点与限制 `limitations`，以及参考文献 `sources`。覆盖全部 8 项登记能力；其中签名、摘要、密钥派生和证书校验不等同于数据加密。
 - `artifact`：云端是否实际登记了兼容的可下载归档；默认 unavailable。
 
-算法描述维护在 `uav_rag/descriptions.py`，执行 `index` 后写入 SQLite 的 `algorithm_descriptions` 表；补充接口按候选服务 ID 从数据库读取，不依赖源码关键词是否命中。修改描述后需重建索引并重启服务。数据库 schema 为 2，旧 schema 1 必须用上面的 `index` 命令重建。元数据 `description_count` 和 `description_revision` 分别记录描述数量与内容哈希，原 `revision` 仍标识 GmSSL 源码语料。
+八项服务描述由 `uav_rag/descriptions.py` 的通用知识和 `openssl_source.py` 的本地来源/限制组成，执行 `index` 后写入 `algorithm_descriptions`。查询从数据库读取。新库 schema 为 3，新增 `service_catalog`、独立 `knowledge_documents` 及静态 `algorithm_inventory`；旧 GmSSL schema 2 仍可只读查询，schema 1 不支持。元数据保存源码 revision、描述 revision、独立文档 SHA-256 和来源文件哈希。修改描述/文档后须建新库并切换服务。
 
-描述属于带参考来源的人工整理知识，不是服务实现或部署证明。因此 RSA、Ed25519 即使有描述，其原有 `evidence_status` 和源码引用也不会自动提升。完整描述保存在云端，Agent 通过分页工具读取需要的用途、优点和限制；通用性能判断不替代目标设备实测。
+运行 `python -X utf8 -m uav_rag document` 读取独立文档，也可在原有鉴权下访问 `GET /v1/documents` 和 `GET /v1/documents/openssl-algorithms`。实际运行算法能力标为 `unverified`：提供目录只有源码，未编译成库；有源码证据不等于目标设备可执行。
+
+描述属于带参考来源的人工整理知识，不是部署证明。OpenSSL 中 RSA-PSS、Ed25519 有实际实现及接口文档，故新库的源码证据为 available；旧 GmSSL 库仍保持原结论。完整服务描述保存在云端，Agent 通过原分页工具按需读取；完整算法文档另由 documents 接口提供，未自动加入 Agent 提示词。
 
 `GET /v1/services` 返回知识服务目录；`GET /health` 返回索引版本；`GET /v1/artifacts/{service_id}` 只提供登记的归档。
 
-GmSSL 的 SM2、SM4、AES 等知识不代表无人机现有镜像使用了 GmSSL。原项目密码服务使用 cryptography，SM2 身份服务还依赖 OpenSSL。这里的检索结果是补充技术资料，最终接口兼容性由原服务登记和执行器判断。
-
-本地 GmSSL 的 RSA 文件主要提供公钥打印，不能证明 RSA-PSS 认证实现；未找到 Ed25519 实现资料。这两项会如实返回证据不足。应补充现有认证服务的说明后再扩充其知识映射，不能因为 RAG 缺资料就判定原服务不存在。
+OpenSSL 的算法知识不代表无人机镜像使用了这份 4.2.0-dev 库。最终接口兼容性仍由原服务登记和执行器判断。`gmssl-sm3`、`gmssl-hkdf`、`gmssl-x509` 保留为历史公开 ID，避免调用方破坏性迁移。
 
 ## 按需查询工作流（当前接入方式）
 
@@ -114,7 +116,7 @@ python -X utf8 -m uav_rag lookup "SM4-GCM 的限制" --services sm4-gcm-v1
 
 ## 缺少服务时下载
 
-GmSSL 是源码资料，不自带兼容原 UAV HTTP 接口、身份材料和 Kubernetes 模板的 OCI 镜像，因此 `deploy/artifacts.json` 默认空登记。提供了真实可用的下载接口和客户端校验，但没有虚构可运行服务。
+OpenSSL 是源码资料，不自带兼容原 UAV HTTP 接口、身份材料和 Kubernetes 模板的 OCI 镜像，因此 `deploy/artifacts.json` 默认空登记。提供了真实可用的下载接口和客户端校验，但没有虚构可运行服务。
 
 管理员已有经过验证的 ARM64 OCI archive 时，将文件放到登记表目录内并填写：
 
@@ -142,11 +144,11 @@ $env:UAV_PROJECT_ROOT='C:\Users\86187\Desktop\pi_uav_k3-codex-service-layout'
 python -X utf8 -m unittest discover -s tests -v
 ```
 
-不设置 `UAV_PROJECT_ROOT` 时，只跳过原 PiRunner 契约测试。其余测试依然使用真实 GmSSL 和本地 HTTP。发布包附带 `sources/GmSSL`，解压后可复现语料测试；开发目录默认读取相邻的 `GmSSL/`。
+不设置 `UAV_PROJECT_ROOT` 时，跳过原 PiRunner 与 Guard 两项契约测试。其余测试使用真实 OpenSSL 语料和本地 HTTP。发布包附带 `sources/openssl` 索引语料快照；开发目录默认读取相邻 `openssl/`。旧库测试使用 schema 2 隔离夹具，若本地保留 `data/gmssl.sqlite3` 还会只读验证真实旧库。
 
 ## 云端发布
 
-运行 `python package_release.py`，得到 `data/uav-rag-local-release.zip`、SHA-256 文件。包内包含代码、SQLite 索引、入库源码、许可证、测试、systemd 样例和逐文件哈希清单。没有凭据或无人机运行数据库。
+运行 `python package_release.py`，得到 `data/uav-rag-openssl-release.zip`、`openssl-release-sha256.txt`。包内包含代码、新 SQLite 索引、算法/迁移说明、入库源码、OpenSSL 许可证、测试、systemd 样例和逐文件哈希清单。原 GmSSL 库和发布包保留；新包没有凭据或无人机运行数据库。
 
 运行 `python verify_release.py` 可逐项核对发布包内文件与清单哈希。哈希验证提供完整性检查，不代替对发布者的身份认证。
 

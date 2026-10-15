@@ -94,7 +94,17 @@ def make_server(kb, host='127.0.0.1', port=8787, *, token=None, artifacts=None):
             if not self.authorized():
                 return
             if self.path == '/v1/services':
-                return self.send_json(200, {'services':[dict(service_id=k, label=v['label'], binding=v['binding']) for k,v in SERVICES.items()]})
+                return self.send_json(200, {'services':[dict(service_id=k, label=v['label'], binding=v['binding']) for k,v in kb.services.items()]})
+            if self.path == '/v1/documents':
+                return self.send_json(200, {'documents': kb.documents()})
+            if self.path.startswith('/v1/documents/'):
+                try:
+                    document = kb.document(self.path[len('/v1/documents/'):])
+                except KeyError:
+                    return self.send_json(404, {'error': 'not_found'})
+                except ValueError:
+                    return self.send_json(409, {'error': 'invalid_or_changed_document'})
+                return self.send_json(200, document)
             prefix = '/v1/artifacts/'
             if self.path.startswith(prefix) and self.path[len(prefix):] in artifacts.entries:
                 try:

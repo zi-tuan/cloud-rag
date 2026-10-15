@@ -8,13 +8,13 @@
 
 ## 云端更新
 
-更新整个 `uav_rag/` 包，重启现有 RAG 服务。schema 仍为 2；已有 schema 2 数据库无需重建，schema 1 必须按 README 重建。保留当前数据库、令牌、HTTPS/SSH 转发设置。
+更新整个 `uav_rag/` 包，重启现有 RAG 服务。OpenSSL 新库为 schema 3；新版仍可只读使用旧 GmSSL schema 2 库，schema 1 不支持。迁移语料时创建独立新库，保留当前数据库、令牌、HTTPS/SSH 转发设置，按 `docs/OPENSSL-MIGRATION.md` 切换与回滚。
 
 新增 `/v1/knowledge/query` 与旧接口使用同一鉴权。旧 `/v1/services/enrich` 和 `query` CLI 保留用于兼容和人工检查，但新 Agent 路径不调用它。服务端内部复用原检索逻辑，响应通过分页器输出。
 
 ## 无人机运行镜像与配置
 
-将完整 `uav_rag/` 放入 PiRunner 与 MCP 进程可导入的位置，例如 `/opt/uav/app/uav_rag/`。无需将 SQLite、GmSSL 源码或完整云端发布包放入无人机镜像。
+将完整 `uav_rag/` 放入 PiRunner 与 MCP 进程可导入的位置，例如 `/opt/uav/app/uav_rag/`。无需将 SQLite、OpenSSL 源码或完整云端发布包放入无人机镜像。
 
 原 PiRunner 启动入口继续使用 `python -m jetson.pi_runner`。旧 `python -m uav_rag.pi_runner` 也兼容，行为是直接启动原 runner。删除过时的 `rag_candidate_command` 配置，不再有初选子进程和 `--no-tools` 阶段。
 
@@ -72,7 +72,7 @@ Agent 根据原任务调用：
 
 预算按 JSON UTF-8 字节计量，不等同于模型 token。MCP 外层包装、工具定义、原系统提示、其他工具和对话历史不在此预算内。部署者仍需按实际模型配置上下文窗口、最大轮数和超时。原 PiRunner 每个任务启动一个 Agent 子进程；应使 MCP 同生命周期，禁止跨任务复用 Guard 已查记录。若改用长期 Agent 会话，需要在宿主增加任务级重置和总上下文管理。
 
-`description` 是人工整理的算法知识；`evidence_status` 仍描述 GmSSL 实现证据。查询 Ed25519 得到用途说明，不会把 `not_found` 提升为 `available`。源码引用的 ID、哈希、起止行仍标识原片段，分段的字符范围由 `text_offset` 和 `text_length` 指明。
+`description` 是人工整理的算法知识；`evidence_status` 描述对应语料的实现证据。OpenSSL 新库含 Ed25519 实现资料，旧 GmSSL 库保持 not_found；两者均不能证明服务已部署。源码引用的 ID、哈希、起止行仍标识原片段，分段的字符范围由 `text_offset` 和 `text_length` 指明。
 
 组合 Guard 会在提交 `uav_combination_select` / `uav_protection_plan` 前检查所选算法是否实际查过。这个检查只证明已查询，不能证明模型认真比较、部署可用或资料充分。查询后仍由原 Guard、执行器和实际回执约束服务执行；RAG 不能直接启动 Pod。
 

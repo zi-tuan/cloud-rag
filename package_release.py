@@ -10,14 +10,19 @@ from uav_rag.index import KnowledgeBase
 
 def main():
     root = Path(__file__).resolve().parent
-    source = root/'sources/GmSSL' if (root/'sources/GmSSL').exists() else root.parent/'GmSSL'
-    kb = KnowledgeBase(root/'data/gmssl.sqlite3')
-    output = root/'data/uav-rag-local-release.zip'
+    source = root/'sources/openssl' if (root/'sources/openssl').exists() else root.parent/'openssl'
+    kb = KnowledgeBase(root/'data/openssl.sqlite3')
+    if kb.metadata['corpus'] != 'OpenSSL':
+        raise ValueError('release requires an OpenSSL index')
+    if hashlib.sha256((root/'docs/OPENSSL-ALGORITHMS.md').read_bytes()).hexdigest() != kb.metadata['algorithm_document_revision']:
+        raise ValueError('algorithm document changed; build a new index before packaging')
+    output = root/'data/uav-rag-openssl-release.zip'
     files = [*sorted((root/'uav_rag').glob('*.py')), *sorted((root/'tests').glob('*.py')),
              *sorted((root/'deploy').glob('*')), root/'README.md',root/'ON-DEMAND-RAG.md',root/'Dockerfile',
-             root/'.dockerignore',root/'demo.py',root/'package_release.py',root/'verify_release.py',root/'VALIDATION.md',root/'data/gmssl.sqlite3']
-    if (root/'data/demo-result.json').exists():
-        files.append(root/'data/demo-result.json')
+             root/'.dockerignore',root/'demo.py',root/'package_release.py',root/'verify_release.py',
+             *sorted((root/'docs').glob('*.md')),root/'data/openssl.sqlite3']
+    if (root/'data/openssl-demo-result.json').exists():
+        files.append(root/'data/openssl-demo-result.json')
     manifest = {'corpus':kb.metadata,'files':{}}
     with zipfile.ZipFile(output,'w',compression=zipfile.ZIP_DEFLATED) as archive:
         for path in files:
@@ -27,20 +32,20 @@ def main():
             raw = path.read_bytes()
             manifest['files'][relative] = hashlib.sha256(raw).hexdigest()
             archive.writestr(relative,raw)
-        license_bytes = (source/'LICENSE').read_bytes()
-        archive.writestr('licenses/GmSSL-LICENSE',license_bytes)
-        manifest['files']['licenses/GmSSL-LICENSE'] = hashlib.sha256(license_bytes).hexdigest()
+        license_bytes = (source/'LICENSE.txt').read_bytes()
+        archive.writestr('licenses/OpenSSL-LICENSE.txt',license_bytes)
+        manifest['files']['licenses/OpenSSL-LICENSE.txt'] = hashlib.sha256(license_bytes).hexdigest()
         with closing(kb.connect()) as db:
             for path,digest in db.execute('SELECT DISTINCT path,sha256 FROM chunks ORDER BY path'):
                 raw = (source/path).read_bytes()
                 if hashlib.sha256(raw).hexdigest() != digest:
                     raise ValueError('source changed since indexing; rebuild before packaging')
-                relative = 'sources/GmSSL/'+path
+                relative = 'sources/openssl/'+path
                 archive.writestr(relative,raw)
                 manifest['files'][relative] = digest
         archive.writestr('release-manifest.json',json.dumps(manifest,ensure_ascii=False,indent=2))
     digest = hashlib.sha256(output.read_bytes()).hexdigest()
-    (root/'data/release-sha256.txt').write_text(digest+'  '+output.name+'\n',encoding='utf-8')
+    (root/'data/openssl-release-sha256.txt').write_text(digest+'  '+output.name+'\n',encoding='utf-8')
     print(json.dumps(dict(archive=str(output),bytes=output.stat().st_size,sha256=digest),indent=2))
 
 

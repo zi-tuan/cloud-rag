@@ -22,5 +22,5 @@ def verify(path):
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('archive',nargs='?',default=str(Path(__file__).parent/'data/uav-rag-local-release.zip'))
+    parser.add_argument('archive',nargs='?',default=str(Path(__file__).parent/'data/uav-rag-openssl-release.zip'))
     print(json.dumps(verify(parser.parse_args().archive),ensure_ascii=False,indent=2))

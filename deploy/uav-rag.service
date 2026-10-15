@@ -1,5 +1,5 @@
 [Unit]
-Description=UAV GmSSL RAG retrieval
+Description=UAV OpenSSL RAG retrieval
 After=network.target
 
 [Service]
@@ -8,7 +8,7 @@ Group=uav
 WorkingDirectory=/opt/uav-rag
 Environment=PYTHONDONTWRITEBYTECODE=1
 Environment=UAV_RAG_TOKEN_FILE=/etc/uav-rag/service.token
-ExecStart=/usr/bin/python3 -m uav_rag serve --host 127.0.0.1 --port 8787 --db /opt/uav-rag/data/gmssl.sqlite3 --artifacts /opt/uav-rag/deploy/artifacts.json
+ExecStart=/usr/bin/python3 -m uav_rag serve --host 127.0.0.1 --port 8787 --db /opt/uav-rag/data/openssl.sqlite3 --artifacts /opt/uav-rag/deploy/artifacts.json
 Restart=on-failure
 NoNewPrivileges=true
 ProtectSystem=strict

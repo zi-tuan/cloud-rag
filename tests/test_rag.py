@@ -20,12 +20,13 @@ from uav_rag.client import RagClient
 from uav_rag.workflow import run_workflow
 from uav_rag.pi_runner import runner_class
 from uav_rag.catalog import SERVICES
-from uav_rag.descriptions import DESCRIPTIONS
+from uav_rag.openssl_source import descriptions
 from uav_rag.retrieval import encoded, query_page
 from uav_rag.tools import RagTools
 from uav_rag.mcp_guard import guard_class
 
 ROOT = Path(__file__).resolve().parents[1]
+DESCRIPTIONS = descriptions()
 
 
 class RagTests(unittest.TestCase):
@@ -33,8 +34,8 @@ class RagTests(unittest.TestCase):
     def setUpClass(cls):
         cls.tmp = tempfile.TemporaryDirectory()
         cls.directory = Path(cls.tmp.name)
-        cls.source = ROOT/'sources/GmSSL' if (ROOT/'sources/GmSSL').exists() else ROOT.parent/'GmSSL'
-        cls.db = cls.directory/'gmssl.sqlite3'
+        cls.source = ROOT/'sources/openssl' if (ROOT/'sources/openssl').exists() else ROOT.parent/'openssl'
+        cls.db = cls.directory/'openssl.sqlite3'
         cls.stats = build(cls.source,cls.db)
         cls.kb = KnowledgeBase(cls.db)
         cls.token = 'test-token-'+'a'*40
@@ -72,13 +73,17 @@ class RagTests(unittest.TestCase):
 
     def test_retrieval_ranking(self):
         results = self.kb.search('sm4 gcm encrypt',limit=5)
-        self.assertTrue(any('sm4_gcm' in r['path'] or r['path']=='include/gmssl/sm4.h' for r in results))
+        self.assertTrue(any('sm4' in r['path'].lower() for r in results))
         results = self.kb.search('证书 撤销 x509 crl verify',limit=5)
-        self.assertTrue(any('crl' in r['path'] or 'x509' in r['path'] for r in results))
+        # OpenSSL's CA tool is relevant to issuance/revocation even though its
+        # filename contains neither x509 nor crl (unlike the old GmSSL layout).
+        self.assertTrue(any(('crl' in r['path'] or 'x509' in r['path']
+                            or r['path'] in ('apps/ca.c', 'apps/CA.pl.in', 'doc/man1/CA.pl.pod'))
+                           and 'crl' in r['text'].lower() for r in results))
 
     def test_all_evidence_classes(self):
         services = self.client.enrich('coverage','签名和加密',['SM2','AES-256-GCM','RSA','Ed25519','unknown-service'])['services']
-        self.assertEqual([s['evidence_status'] for s in services],['available','available','insufficient','not_found','not_found'])
+        self.assertEqual([s['evidence_status'] for s in services],['available','available','available','available','not_found'])
         self.assertFalse(services[0]['artifact']['available'])
         self.assertEqual(services[-1]['citations'],[])
 
@@ -99,9 +104,9 @@ class RagTests(unittest.TestCase):
             for field in ('advantages', 'limitations', 'sources'):
                 self.assertGreater(len(description[field]), 0)
         by_id = {s['service_id']: s for s in result['services']}
-        self.assertEqual(by_id['auth-rsa']['evidence_status'], 'insufficient')
-        self.assertEqual(by_id['auth-ed25519']['evidence_status'], 'not_found')
-        self.assertEqual(by_id['auth-ed25519']['citations'], [])
+        self.assertEqual(by_id['auth-rsa']['evidence_status'], 'available')
+        self.assertEqual(by_id['auth-ed25519']['evidence_status'], 'available')
+        self.assertTrue(by_id['auth-ed25519']['citations'])
 
     def test_descriptions_read_from_database_not_runtime_catalog(self):
         original = DESCRIPTIONS['sm4-gcm-v1']['purpose']
@@ -226,6 +231,125 @@ class RagTests(unittest.TestCase):
         with closing(self.kb.connect()) as db:
             with self.assertRaises(sqlite3.OperationalError):
                 db.execute('DELETE FROM chunks')
+
+    def test_openssl_source_inventory_and_usage_boundary(self):
+        self.assertEqual(self.stats['corpus'], 'OpenSSL')
+        self.assertEqual(self.stats['source_version'], '4.2.0-dev')
+        self.assertEqual(self.stats['runtime_enabled'], 'unverified')
+        with closing(self.kb.connect()) as db:
+            rows = db.execute('SELECT * FROM algorithm_inventory').fetchall()
+        self.assertEqual(len(rows), 378)
+        self.assertTrue(all(r['runtime_enabled'] == 'unverified' for r in rows))
+        self.assertTrue(any('SM4-GCM' in json.loads(r['names']) for r in rows))
+        self.assertTrue(any('ASCON-AEAD128' in json.loads(r['names']) for r in rows))
+        self.assertTrue(any(r['provider'] == 'legacy' for r in rows))
+        for path, digest in self.stats['source_hashes'].items():
+            self.assertEqual(hashlib.sha256((self.source/path).read_bytes()).hexdigest(), digest)
+
+    def test_independent_document_database_and_http(self):
+        with self.client.request('/v1/documents') as response:
+            listing = json.load(response)['documents']
+        self.assertEqual([d['id'] for d in listing], ['openssl-algorithms'])
+        with self.client.request('/v1/documents/openssl-algorithms') as response:
+            doc = json.load(response)
+        self.assertEqual(doc['content'], (ROOT/'docs/OPENSSL-ALGORITHMS.md').read_bytes().decode('utf-8'))
+        self.assertEqual(doc['sha256'], self.stats['algorithm_document_revision'])
+        self.assertEqual(doc['source_version'], '4.2.0-dev')
+        with self.assertRaises(HTTPError) as error:
+            RagClient(self.url, 'wrong').request('/v1/documents/openssl-algorithms')
+        self.assertEqual(error.exception.code, 401)
+        with self.assertRaises(HTTPError) as error:
+            self.client.request('/v1/documents/unknown')
+        self.assertEqual(error.exception.code, 404)
+        for identifier in ('../secret', '', "x' OR 1=1", 42):
+            with self.assertRaises(ValueError):
+                self.kb.document(identifier)
+
+    def test_document_tampering_rejected(self):
+        # Only a disposable SQLite copy is modified.
+        path = self.directory/'tampered.sqlite3'
+        with closing(self.kb.connect()) as original, closing(sqlite3.connect(path)) as copied:
+            original.backup(copied)
+            copied.execute('UPDATE knowledge_documents SET content=?', ('tampered',))
+            copied.commit()
+        with self.assertRaisesRegex(ValueError, 'checksum'):
+            KnowledgeBase(path).document('openssl-algorithms')
+
+    def test_index_never_overwrites_existing_database(self):
+        before = hashlib.sha256(self.db.read_bytes()).hexdigest()
+        with self.assertRaisesRegex(ValueError, 'already exists'):
+            build(self.source, self.db)
+        self.assertEqual(hashlib.sha256(self.db.read_bytes()).hexdigest(), before)
+
+    def test_invalid_source_does_not_publish(self):
+        target = self.directory/'invalid.sqlite3'
+        with self.assertRaises(ValueError):
+            build(self.directory, target)
+        self.assertFalse(target.exists())
+
+    def test_catalog_is_read_from_database(self):
+        from unittest.mock import patch
+        with patch.dict(SERVICES['auth-ed25519'], paths=[]):
+            kb = KnowledgeBase(self.db)
+            item = kb.enrich(dict(task_id='persisted', query='ed25519',
+                                  candidate_services=['Ed25519']))['services'][0]
+        self.assertEqual(item['evidence_status'], 'available')
+        self.assertTrue(item['citations'])
+
+    def test_old_database_read_only_compatibility(self):
+        from uav_rag.legacy_catalog import SERVICES as old_services
+        from uav_rag.descriptions import DESCRIPTIONS as old_descriptions
+        # A schema-2 fixture makes rollback testing portable in the new package.
+        path = self.directory/'legacy-fixture.sqlite3'
+        text = 'int sm4_gcm_encrypt();'
+        digest = hashlib.sha256(text.encode()).hexdigest()
+        with closing(sqlite3.connect(path)) as db:
+            db.executescript('''
+                CREATE TABLE metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+                CREATE TABLE algorithm_descriptions (service_id TEXT PRIMARY KEY,
+                    purpose TEXT, advantages TEXT, limitations TEXT, sources TEXT);
+                CREATE TABLE chunks (id TEXT PRIMARY KEY, path TEXT, start_line INTEGER,
+                    end_line INTEGER, sha256 TEXT, text TEXT, search_text TEXT);
+                CREATE VIRTUAL TABLE search USING fts5(search_text, content='chunks', content_rowid='rowid');
+            ''')
+            metadata = dict(schema=2, corpus='GmSSL', revision='legacy-fixture',
+                            description_revision='legacy-descriptions')
+            db.executemany('INSERT INTO metadata VALUES (?,?)', [(k,json.dumps(v)) for k,v in metadata.items()])
+            db.execute('INSERT INTO chunks VALUES (?,?,?,?,?,?,?)',
+                       ('old-citation', 'src/sm4_gcm.c', 1, 1, digest, text, 'sm4 gcm encrypt'))
+            for sid, d in old_descriptions.items():
+                db.execute('INSERT INTO algorithm_descriptions VALUES (?,?,?,?,?)',
+                    (sid, d['purpose'], *(json.dumps(d[k]) for k in ('advantages','limitations','sources'))))
+            db.execute("INSERT INTO search(search) VALUES('rebuild')")
+            db.commit()
+        # Also check the actual pre-migration database when present. Never write it.
+        databases = [path]
+        real_old = ROOT/'data/gmssl.sqlite3'
+        if real_old.exists():
+            databases.append(real_old)
+        for old in databases:
+            with self.subTest(database=old.name):
+                before = hashlib.sha256(old.read_bytes()).hexdigest()
+                kb = KnowledgeBase(old)
+                self.assertEqual(kb.services, old_services)
+                result = kb.enrich(dict(task_id='rollback', query='sm4',
+                                        candidate_services=['SM4-GCM', 'RSA', 'Ed25519']))
+                self.assertTrue(result['services'][0]['citations'])
+                self.assertEqual(result['services'][2]['evidence_status'], 'not_found')
+                with closing(kb.connect()) as db:
+                    self.assertEqual(db.execute('PRAGMA integrity_check').fetchone()[0], 'ok')
+                    expected = db.execute('SELECT purpose FROM algorithm_descriptions WHERE service_id=?',
+                                          ('sm4-gcm-v1',)).fetchone()[0]
+                    with self.assertRaises(sqlite3.OperationalError):
+                        db.execute('DELETE FROM metadata')
+                self.assertEqual(result['services'][0]['description']['purpose'], expected)
+                self.assertEqual(kb.documents(), [])
+                self.assertEqual(hashlib.sha256(old.read_bytes()).hexdigest(), before)
+                args = dict(query='用途', candidate_services=list(old_services), max_bytes=4096)
+                cursor = query_page(kb, args)['next_cursor']
+                self.assertIsNotNone(cursor)
+                with self.assertRaisesRegex(ValueError, 'stale cursor'):
+                    query_page(self.kb, {**args, 'cursor': cursor})
 
     def test_all_candidates_pagination_is_bounded_and_lossless(self):
         candidates = list(SERVICES) * 2  # 16 inputs, eight unique algorithms.
